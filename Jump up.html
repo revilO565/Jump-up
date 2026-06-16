@@ -1,0 +1,3010 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jump Up</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --pixel: 'Press Start 2P', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--pixel);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    cursor: none !important;
+    user-select: none;
+  }
+  * { cursor: none !important; }
+
+  /* Scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.08s;
+  }
+  .screen.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Flash overlay */
+  #flash {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.15s;
+  }
+  #flash.on { opacity: 1; }
+
+  /* ─────────────────────────────────────
+     START SCREEN
+  ───────────────────────────────────── */
+  #start-screen {
+    gap: 48px;
+    cursor: pointer;
+  }
+
+  .title {
+    font-size: clamp(28px, 6vw, 56px);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    animation: titleFloat 2.4s ease-in-out infinite;
+    text-shadow:
+      4px 4px 0 #fff2,
+      0 0 40px #fff3;
+  }
+
+  @keyframes titleFloat {
+    0%,100% { transform: translateY(0px); }
+    50%      { transform: translateY(-10px); }
+  }
+
+  .blink-text {
+    font-size: clamp(8px, 1.8vw, 14px);
+    letter-spacing: 2px;
+    animation: blink 1s step-start infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0; }
+  }
+
+
+
+  /* ─────────────────────────────────────
+     HOME SCREEN
+  ───────────────────────────────────── */
+  #home-screen {
+    gap: 0;
+    justify-content: center;
+  }
+
+  @keyframes panelIn {
+    from { opacity:0; transform: scale(0.96); }
+    to   { opacity:1; transform: scale(1); }
+  }
+
+  /* ─────────────────────────────────────
+     AUTH SCREEN
+  ───────────────────────────────────── */
+  #auth-screen {
+    gap: 0;
+    justify-content: center;
+  }
+
+  .auth-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 40px;
+    border: 3px solid #fff;
+    animation: panelIn 0.4s cubic-bezier(.17,.67,.35,1.3) both;
+  }
+  .auth-tab-btn {
+    font-family: var(--pixel);
+    font-size: clamp(7px, 1.4vw, 11px);
+    color: #fff;
+    background: #000;
+    border: none;
+    padding: 12px 22px;
+    cursor: none !important;
+    letter-spacing: 2px;
+    transition: background 0.08s, color 0.08s;
+    position: relative;
+  }
+  .auth-tab-btn:not(:last-child) { border-right: 3px solid #fff; }
+  .auth-tab-btn.active { background: #fff; color: #000; }
+  .auth-tab-btn:not(.active):hover { background: #222; }
+
+  .auth-panel {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: min(420px, 92vw);
+    animation: panelIn 0.25s ease both;
+  }
+  .auth-panel.active { display: flex; }
+
+  .auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+  .auth-label {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1.1vw, 8px);
+    letter-spacing: 1px;
+    color: #aaa;
+  }
+  .auth-field.has-error .pixel-input {
+    border-color: #ff4444;
+    box-shadow: 0 0 0 2px rgba(255,68,68,0.25);
+  }
+  .auth-error-text {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1vw, 7px);
+    letter-spacing: 1px;
+    color: #ff4444;
+    display: none;
+    line-height: 1.6;
+  }
+  .auth-field.has-error .auth-error-text { display: block; }
+
+  .auth-forgot {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1vw, 7px);
+    letter-spacing: 1px;
+    color: #888;
+    text-decoration: underline;
+    cursor: none !important;
+    align-self: flex-end;
+    margin-top: -4px;
+    transition: color 0.08s;
+  }
+  .auth-forgot:hover { color: #fff; }
+
+  .auth-submit {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .auth-guest-text {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1.1vw, 9px);
+    letter-spacing: 1px;
+    color: #aaa;
+    text-align: center;
+    line-height: 2;
+    margin-bottom: 8px;
+  }
+
+  .guest-transfer-notice {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1vw, 7px);
+    letter-spacing: 1px;
+    color: #8f8;
+    text-align: center;
+    line-height: 1.8;
+    border: 2px solid #8f8;
+    padding: 10px 14px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* ── Pixel Input ── */
+  .pixel-input {
+    font-family: var(--pixel);
+    font-size: clamp(7px, 1.2vw, 10px);
+    background: #000;
+    color: #fff;
+    border: 3px solid #fff;
+    padding: 10px 14px;
+    width: 100%;
+    letter-spacing: 2px;
+    outline: none;
+    transition: box-shadow 0.12s;
+    caret-color: #fff;
+  }
+  .pixel-input:focus {
+    box-shadow: 0 0 0 3px #fff4, inset 0 0 0 1px #fff;
+  }
+  .pixel-input::placeholder { color: #555; }
+
+  /* ── Pixel Button ── */
+  .pixel-btn {
+    font-family: var(--pixel);
+    font-size: clamp(8px, 1.4vw, 11px);
+    background: #000;
+    color: #fff;
+    border: 3px solid #fff;
+    padding: 12px 28px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    position: relative;
+    transition: background 0.06s, color 0.06s, transform 0.06s;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .pixel-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.15s;
+  }
+  .pixel-btn:hover::before { transform: scaleX(1); }
+  .pixel-btn:hover { color: #000; }
+  .pixel-btn:hover span { position: relative; z-index: 1; }
+  .pixel-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  .pixel-btn.big {
+    font-size: clamp(12px, 2.2vw, 18px);
+    padding: 18px 56px;
+    letter-spacing: 4px;
+    animation: btnPop 0.5s cubic-bezier(.17,.67,.35,1.4) both;
+    overflow: visible;
+  }
+  .pixel-btn.big.has-hint {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 56px 10px;
+    gap: 6px;
+  }
+  .pixel-btn:hover span { position: relative; z-index: 1; }
+  .key-hint {
+    font-family: var(--pixel);
+    font-size: 7px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 1;
+    position: static;
+    color: #fff;
+    transition: color 0.06s;
+  }
+  .pixel-btn:hover .key-hint { color: #000; }
+  @keyframes btnPop {
+    from { opacity:0; transform: scale(0.7); }
+    to   { opacity:1; transform: scale(1); }
+  }
+
+  .pixel-btn span { position: relative; z-index: 1; }
+
+  /* corner decorations */
+  .pixel-btn.big::after {
+    content: '▶';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.1s, right 0.1s;
+  }
+  .pixel-btn.big:hover::after {
+    opacity: 1;
+    right: 10px;
+    color: #000;
+  }
+
+  /* Pixel corner borders */
+  .pixel-box {
+    position: relative;
+    padding: 2px;
+  }
+  .pixel-box::before, .pixel-box::after,
+  .pixel-box > .corner-tl, .pixel-box > .corner-br {
+    content: '';
+    position: absolute;
+    width: 8px; height: 8px;
+    background: #fff;
+  }
+
+  /* ── PIXEL CURSOR ── */
+  #pixel-cursor {
+    position: fixed;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 99999;
+    image-rendering: pixelated;
+  }
+
+  /* ── GAME SCREEN ── */
+  #game-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+  }
+  #game-canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    image-rendering: pixelated;
+  }
+  #game-hud {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pixel);
+    font-size: 10px;
+    color: #fff;
+    letter-spacing: 2px;
+    pointer-events: none;
+  }
+  #game-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    background: rgba(0,0,0,0.75);
+  }
+  #game-overlay.show { display: flex; }
+  #game-overlay .over-title {
+    font-family: var(--pixel);
+    font-size: clamp(16px, 3vw, 28px);
+    letter-spacing: 4px;
+  }
+  #game-overlay .over-score {
+    font-family: var(--pixel);
+    font-size: clamp(9px, 1.5vw, 12px);
+    letter-spacing: 2px;
+    color: #aaa;
+  }
+
+  /* ── Stats ── */
+  #classic-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+    border: 2px solid #333;
+    padding: 16px 28px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 32px;
+    font-size: clamp(7px, 1.2vw, 10px);
+    letter-spacing: 1px;
+  }
+  .stat-label { color: #888; }
+  .stat-val   { color: #fff; }
+
+  #player-name-tag {
+    font-family: var(--pixel);
+    font-size: clamp(7px, 1.2vw, 10px);
+    letter-spacing: 2px;
+    color: #fff;
+    margin-bottom: 16px;
+    display: none;
+  }
+  #player-name-tag.show { display: block; }
+
+
+
+  #pause-btn {
+    position: absolute;
+    top: 12px; left: 16px;
+    font-family: var(--pixel);
+    font-size: 9px;
+    background: #000;
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 7px 14px;
+    letter-spacing: 1px;
+    cursor: none !important;
+    transition: background 0.08s, color 0.08s;
+  }
+  #pause-btn:hover { background: #fff; color: #000; }
+
+  #pause-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    background: rgba(0,0,0,0.82);
+  }
+  #pause-overlay.show { display: flex; }
+
+  #countdown-num {
+    font-family: var(--pixel);
+    font-size: clamp(48px, 10vw, 80px);
+    letter-spacing: 4px;
+    animation: countPop 0.4s cubic-bezier(.17,.67,.35,1.4);
+  }
+  @keyframes countPop {
+    from { transform: scale(1.6); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+  #countdown-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #pause-btns {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* ── Menu Warning Dialog ── */
+  #menu-warning {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    z-index: 10;
+  }
+  #menu-warning.show { display: flex; }
+  #menu-warning-box {
+    border: 3px solid #fff;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: min(380px, 88vw);
+    background: #000;
+  }
+  .warning-text {
+    font-family: var(--pixel);
+    font-size: clamp(7px, 1.2vw, 9px);
+    letter-spacing: 1px;
+    line-height: 2;
+    color: #fff;
+    text-align: center;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .toggle-label {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1vw, 8px);
+    letter-spacing: 1px;
+    color: #aaa;
+  }
+  .toggle-switch {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #333;
+    border: 2px solid #666;
+    cursor: none !important;
+    transition: background 0.15s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    left: 2px; top: 2px;
+    background: #fff;
+    transition: transform 0.15s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: #fff; border-color: #fff; }
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+    background: #000;
+  }
+  .warning-btns {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+  }
+
+
+
+  #dev-label {
+    position: absolute;
+    top: 36px; left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pixel);
+    font-size: 8px;
+    color: #fff;
+    letter-spacing: 2px;
+    pointer-events: none;
+    display: none;
+  }
+  #dev-console {
+    position: absolute;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  #dev-console.show { display: flex; }
+  #dev-autocomplete {
+    display: flex;
+    flex-direction: column-reverse;
+    width: 380px;
+    border: 2px solid #fff;
+    border-bottom: none;
+    background: #000;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .autocomplete-item {
+    font-family: var(--pixel);
+    font-size: 7px;
+    color: #888;
+    padding: 5px 10px;
+    letter-spacing: 1px;
+    border-top: 1px solid #222;
+    cursor: none !important;
+    transition: background 0.08s, color 0.08s;
+  }
+  .autocomplete-item:hover {
+    background: #fff;
+    color: #000;
+  }
+  .autocomplete-item:last-child {
+    color: #888;
+    background: #000;
+  }
+  .autocomplete-item:last-child:hover {
+    background: #fff;
+    color: #000;
+  }
+  #dev-input {
+    font-family: var(--pixel);
+    font-size: 10px;
+    background: #000;
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 8px 14px;
+    width: 380px;
+    letter-spacing: 2px;
+    outline: none;
+  }
+  #dev-feedback {
+    font-family: var(--pixel);
+    font-size: 8px;
+    color: #fff;
+    letter-spacing: 1px;
+    min-height: 14px;
+  }
+  #dev-cmd-error {
+    position: absolute;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pixel);
+    font-size: 8px;
+    color: #fff;
+    letter-spacing: 1px;
+    display: none;
+    pointer-events: none;
+  }
+
+  /* ── Easter Egg ── */
+  #easter-msg {
+    position: absolute;
+    bottom: 60px; left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pixel);
+    font-size: clamp(7px, 1.2vw, 10px);
+    color: #fff;
+    letter-spacing: 2px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s;
+    max-width: 80vw;
+    line-height: 2;
+    display: none;
+  }
+  #easter-msg.show { display: block; }
+  #easter-msg.visible { opacity: 1; }
+
+  /* ── Settings ── */
+  #settings-btn {
+    position: fixed;
+    top: 16px; left: 16px;
+    background: #000;
+    border: 2px solid #fff;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: none !important;
+    transition: background 0.08s;
+    z-index: 10;
+    visibility: hidden;
+  }
+  #settings-btn.visible { visibility: visible; }
+  #settings-btn:hover { background: #fff; }
+  #settings-btn:hover svg { color: #000; }
+  #settings-btn svg { color: #fff; width: 20px; height: 20px; transition: color 0.08s; }
+
+  #settings-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.88);
+    z-index: 500;
+  }
+  #settings-overlay.show { display: flex; }
+
+  #settings-box {
+    background: #000;
+    border: 3px solid #fff;
+    padding: 28px 32px 24px;
+    width: min(420px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    animation: panelIn 0.25s ease both;
+  }
+
+  #settings-close {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: #000;
+    border: 2px solid #fff;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: none !important;
+    transition: background 0.08s;
+  }
+  #settings-close:hover { background: #fff; }
+  #settings-close:hover svg { stroke: #000; }
+  #settings-close svg { stroke: #fff; fill: none; stroke-width: 2.5; width: 12px; height: 12px; transition: stroke 0.08s; }
+
+  #settings-title {
+    font-family: var(--pixel);
+    font-size: clamp(10px, 2vw, 14px);
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #222;
+    gap: 16px;
+  }
+  .setting-row:last-of-type { border-bottom: none; }
+  .setting-label {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1.1vw, 8px);
+    letter-spacing: 1px;
+    color: #fff;
+  }
+
+  .settings-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .settings-actions:first-of-type {
+    margin-top: 20px;
+    border-top: 1px solid #333;
+    padding-top: 20px;
+  }
+  .settings-actions:not(:first-of-type) {
+    margin-top: 14px;
+    border-top: 1px solid #333;
+    padding-top: 14px;
+  }
+
+  .confirm-dialog {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    z-index: 600;
+  }
+  .confirm-dialog.show { display: flex; }
+  .confirm-box {
+    background: #000;
+    border: 3px solid #fff;
+    padding: 28px 32px;
+    width: min(380px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    align-items: center;
+  }
+  .confirm-box .warning-text { text-align: center; }
+  .confirm-box .warning-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .confirm-box .auth-field { width: 100%; }
+  .confirm-box .auth-forgot { align-self: center; margin-top: -6px; }
+
+  .version-tag {
+    position: absolute;
+    bottom: 14px;
+    right: 20px;
+    font-size: 7px;
+    color: #444;
+    letter-spacing: 1px;
+  }
+
+
+</style>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    sendPasswordResetEmail, signOut, onAuthStateChanged,
+    reauthenticateWithCredential, EmailAuthProvider, deleteUser
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAf3LnSiOWpR37Z-6pLNLSYV3EfIRA-rB8",
+    authDomain: "jump-up-d98e2.firebaseapp.com",
+    projectId: "jump-up-d98e2",
+    storageBucket: "jump-up-d98e2.firebasestorage.app",
+    messagingSenderId: "517731096673",
+    appId: "1:517731096673:web:48c396a5b28327adb5b220"
+  };
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+
+  // Default shape of a user's saved data
+  function defaultUserData(playerName) {
+    return {
+      playerName: playerName,
+      stats: { best: 0, games: 0, total: 0 },
+      settings: {
+        showHeight: true,
+        skipTimer: false,
+        showBest: true,
+        showCursor: false,
+        showWarning: true
+      },
+      rank: { points: 0 } // placeholder for future rank system
+    };
+  }
+
+  // ── Sign Up ──
+  window.firebaseSignUp = async function (playerName, email, password) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const data = defaultUserData(playerName);
+    await setDoc(doc(db, "users", cred.user.uid), data);
+    return { uid: cred.user.uid, data };
+  };
+
+  // ── Login ──
+  window.firebaseLogin = async function (email, password) {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    const snap = await getDoc(doc(db, "users", cred.user.uid));
+    let data;
+    if (snap.exists()) {
+      data = snap.data();
+    } else {
+      // Fallback: create a default doc if missing
+      data = defaultUserData(cred.user.email.split('@')[0]);
+      await setDoc(doc(db, "users", cred.user.uid), data);
+    }
+    return { uid: cred.user.uid, data };
+  };
+
+  // ── Forgot Password ──
+  window.firebaseForgotPassword = async function (email) {
+    await sendPasswordResetEmail(auth, email);
+  };
+
+  // ── Logout ──
+  window.firebaseLogout = async function () {
+    await signOut(auth);
+  };
+
+  // ── Save stats + settings ──
+  window.firebaseSaveData = async function (uid, stats, settings) {
+    if (!uid) return;
+    await updateDoc(doc(db, "users", uid), { stats, settings });
+  };
+
+  // ── Rename ──
+  window.firebaseRename = async function (uid, newName) {
+    if (!uid) throw { code: 'auth/no-current-user' };
+    await updateDoc(doc(db, "users", uid), { playerName: newName });
+  };
+
+  // ── Delete Account ──
+  window.firebaseDeleteAccount = async function (password) {
+    const user = auth.currentUser;
+    if (!user) throw { code: 'auth/no-current-user' };
+    const cred = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, cred);
+    await deleteDoc(doc(db, "users", user.uid));
+    await deleteUser(user);
+  };
+
+  // ── Forgot Password (for currently logged-in user, e.g. from delete dialog) ──
+  window.firebaseForgotPasswordForCurrentUser = async function () {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw { code: 'auth/no-current-user' };
+    await sendPasswordResetEmail(auth, user.email);
+  };
+
+  // Translate Firebase error codes to friendly messages
+  window.firebaseErrorMessage = function (err) {
+    const code = err && err.code ? err.code : '';
+    switch (code) {
+      case 'auth/email-already-in-use': return 'This email is already registered.';
+      case 'auth/invalid-email': return 'Please enter a valid email address.';
+      case 'auth/weak-password': return 'Password must be at least 6 characters.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential': return 'Incorrect email or password.';
+      case 'auth/too-many-requests': return 'Too many attempts. Please try again later.';
+      case 'auth/no-current-user': return 'You are not logged in.';
+      default: return 'Something went wrong. Please try again.';
+    }
+  };
+
+  // ── Persistent Login ──
+  // Store result here so main script can consume it after its own setup
+  window._firebaseAuthResult = null;
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        let data;
+        if (snap.exists()) {
+          data = snap.data();
+        } else {
+          data = defaultUserData(user.email.split('@')[0]);
+          await setDoc(doc(db, "users", user.uid), data);
+        }
+        window._firebaseAuthResult = { uid: user.uid, data };
+      } catch (e) {
+        window._firebaseAuthResult = { uid: null };
+      }
+    } else {
+      window._firebaseAuthResult = { uid: null };
+    }
+    if (window._firebaseAuthReady) {
+      const cb = window._firebaseAuthReady;
+      window._firebaseAuthReady = null; // only fire once
+      cb();
+    }
+  });
+</script>
+</head>
+<body>
+
+<canvas id="pixel-cursor"></canvas>
+
+<!-- Settings Button (home screen) -->
+<button id="settings-btn" onclick="openSettings()">
+  <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" fill-rule="evenodd">
+    <path d="M12 3a1 1 0 0 0-1 1v.85a7.1 7.1 0 0 0-1.6.66l-.6-.6a1 1 0 0 0-1.42 0l-1.42 1.42a1 1 0 0 0 0 1.42l.6.6c-.3.5-.5 1.04-.66 1.6H4a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h.85c.16.56.37 1.1.66 1.6l-.6.6a1 1 0 0 0 0 1.42l1.42 1.42a1 1 0 0 0 1.42 0l.6-.6c.5.3 1.04.5 1.6.66V20a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-.85c.56-.16 1.1-.37 1.6-.66l.6.6a1 1 0 0 0 1.42 0l1.42-1.42a1 1 0 0 0 0-1.42l-.6-.6c.3-.5.5-1.04.66-1.6H20a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-.85a7.1 7.1 0 0 0-.66-1.6l.6-.6a1 1 0 0 0 0-1.42l-1.42-1.42a1 1 0 0 0-1.42 0l-.6.6a7.1 7.1 0 0 0-1.6-.66V4a1 1 0 0 0-1-1h-2zM12 8.8a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>
+  </svg>
+</button>
+
+<!-- Settings Overlay -->
+<div id="settings-overlay">
+  <div id="settings-box">
+    <button id="settings-close" onclick="closeSettings()">
+      <svg viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg>
+    </button>
+    <div id="settings-title">Settings</div>
+
+    <div class="setting-row">
+      <span class="setting-label">Show height</span>
+      <label class="toggle-switch"><input type="checkbox" id="set-show-height" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Skip timer</span>
+      <label class="toggle-switch"><input type="checkbox" id="set-skip-timer"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Show best height</span>
+      <label class="toggle-switch"><input type="checkbox" id="set-show-best" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Show cursor</span>
+      <label class="toggle-switch"><input type="checkbox" id="set-show-cursor"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Show Menu/Reset warning</span>
+      <label class="toggle-switch"><input type="checkbox" id="set-show-warning" checked><span class="toggle-slider"></span></label>
+    </div>
+
+    <div class="settings-actions">
+      <button class="pixel-btn" onclick="resetSettings()"><span>Reset Settings</span></button>
+    </div>
+
+    <!-- Logged-in account actions -->
+    <div class="settings-actions" id="settings-account-actions" style="display:none">
+      <button class="pixel-btn" onclick="openRenameDialog()"><span>Rename</span></button>
+      <button class="pixel-btn" onclick="openLogoutDialog()"><span>Log out</span></button>
+      <button class="pixel-btn" onclick="openDeleteDialog()"><span>Delete account</span></button>
+    </div>
+
+    <!-- Not logged in / guest actions -->
+    <div class="settings-actions" id="settings-guest-actions" style="display:none">
+      <button class="pixel-btn" onclick="goToAuthFromSettings('login')"><span>Login</span></button>
+      <button class="pixel-btn" onclick="goToAuthFromSettings('signup')"><span>Sign up</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename dialog -->
+<div id="rename-dialog" class="confirm-dialog">
+  <div class="confirm-box">
+    <div class="warning-text">Enter your new name</div>
+    <div class="warning-text" id="rename-current-text" style="color:#888;font-size:7px;"></div>
+    <div class="auth-field" id="rename-field">
+      <input class="pixel-input" type="text" id="rename-input" spellcheck="false" autocomplete="off" maxlength="16">
+      <span class="auth-error-text" id="rename-error"></span>
+    </div>
+    <div class="warning-btns">
+      <button class="pixel-btn" onclick="confirmRename()"><span>Rename</span></button>
+      <button class="pixel-btn" onclick="closeRenameDialog()"><span>Cancel</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Logout dialog -->
+<div id="logout-dialog" class="confirm-dialog">
+  <div class="confirm-box">
+    <div class="warning-text">Log out?</div>
+    <div class="warning-text" style="color:#888;">You're coming back, right?</div>
+    <div class="warning-btns">
+      <button class="pixel-btn" onclick="confirmLogout()"><span>Log out</span></button>
+      <button class="pixel-btn" onclick="closeLogoutDialog()"><span>Cancel</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete account dialog -->
+<div id="delete-dialog" class="confirm-dialog">
+  <div class="confirm-box">
+    <div class="warning-text">Delete account? :(</div>
+    <div class="warning-text" style="color:#888;">Everything will be deleted.</div>
+    <div class="auth-field" id="delete-password-field">
+      <input class="pixel-input" type="password" id="delete-password" spellcheck="false" autocomplete="off" placeholder="Password">
+      <span class="auth-error-text" id="delete-password-error"></span>
+    </div>
+    <span class="auth-forgot" onclick="forgotPasswordFromDelete()">Forgot password?</span>
+    <div class="warning-btns">
+      <button class="pixel-btn" onclick="confirmDelete()"><span>Delete account :(</span></button>
+      <button class="pixel-btn" onclick="closeDeleteDialog()"><span>Cancel</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     GAME SCREEN
+════════════════════════════════════ -->
+<div id="game-screen">
+  <canvas id="game-canvas"></canvas>
+  <div id="game-hud">HEIGHT: <span id="hud-score">0</span></div>
+  <button id="pause-btn" onclick="pauseGame()"><span>⏸ Pause</span></button>
+  <div id="game-overlay">
+    <div class="over-title" id="overlay-title">GAME OVER</div>
+    <div class="over-score" id="overlay-score">HEIGHT: 0</div>
+    <button class="pixel-btn big has-hint" id="overlay-primary-btn" onclick="restartGame()"><span>Retry</span><span class="key-hint">Space</span></button>
+    <button class="pixel-btn" onclick="goHome()"><span>Menu</span></button>
+  </div>
+  <div id="pause-overlay">
+    <div class="over-title" id="pause-title">Paused</div>
+    <div id="countdown-wrap" style="display:none">
+      <div id="countdown-num">3</div>
+      <div class="blink-text" style="font-size:9px;animation:none;opacity:0.6">— Space to skip —</div>
+    </div>
+    <div id="pause-btns">
+      <button class="pixel-btn big has-hint" onclick="resumeGame()"><span>Continue</span><span class="key-hint">Space</span></button>
+      <button class="pixel-btn" onclick="confirmGoHome()"><span>Menu</span></button>
+      <button class="pixel-btn" onclick="confirmReset()"><span>Reset</span></button>
+    </div>
+  </div>
+
+  <div id="easter-msg"></div>
+  <div id="dev-label">— DEVELOPER MODE —</div>
+  <div id="dev-console">
+    <div id="dev-autocomplete"></div>
+    <input id="dev-input" type="text" placeholder="> enter command..." spellcheck="false" autocomplete="off">
+    <div id="dev-feedback"></div>
+  </div>
+  <div id="dev-cmd-error">Command not found</div>
+
+  <!-- Menu/Reset warning dialog -->
+  <div id="menu-warning">
+    <div id="menu-warning-box">
+      <div class="warning-text" id="menu-warning-text">Your score will not count if you go back to the menu.</div>
+      <div class="toggle-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="no-warn-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label">Don't show warning again</span>
+      </div>
+      <div class="warning-btns">
+        <button class="pixel-btn" id="menu-warning-confirm-btn" onclick="goHomeFromWarning()"><span>Menu</span></button>
+        <button class="pixel-btn" onclick="closeWarning()"><span>Cancel</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="flash"></div>
+
+<!-- ════════════════════════════════════
+     START SCREEN
+════════════════════════════════════ -->
+<div id="start-screen" class="screen">
+  <div class="title">Jump Up</div>
+  <div class="blink-text">— Click to Start —</div>
+</div>
+
+<!-- ════════════════════════════════════
+     AUTH SCREEN
+════════════════════════════════════ -->
+<div id="auth-screen" class="screen">
+
+  <div class="auth-tabs">
+    <button class="auth-tab-btn active" id="auth-tab-login" onclick="switchAuthTab('login')"><span>Login</span></button>
+    <button class="auth-tab-btn" id="auth-tab-signup" onclick="switchAuthTab('signup')"><span>Sign Up</span></button>
+    <button class="auth-tab-btn" id="auth-tab-guest" onclick="switchAuthTab('guest')"><span id="auth-tab-guest-label">Guest</span></button>
+  </div>
+
+  <!-- Login Panel -->
+  <div class="auth-panel active" id="auth-panel-login">
+    <div class="auth-field" id="login-email-field">
+      <span class="auth-label">Email or Username</span>
+      <input class="pixel-input" type="text" id="login-email" spellcheck="false" autocomplete="off">
+      <span class="auth-error-text" id="login-email-error"></span>
+    </div>
+    <div class="auth-field" id="login-password-field">
+      <span class="auth-label">Password</span>
+      <input class="pixel-input" type="password" id="login-password" spellcheck="false" autocomplete="off">
+      <span class="auth-error-text" id="login-password-error"></span>
+    </div>
+    <span class="auth-forgot" onclick="forgotPassword()">Forgot password?</span>
+    <button class="pixel-btn big auth-submit" onclick="submitLogin()"><span>Login</span></button>
+  </div>
+
+  <!-- Sign Up Panel -->
+  <div class="auth-panel" id="auth-panel-signup">
+    <div class="auth-field" id="signup-name-field">
+      <span class="auth-label">Player Name</span>
+      <input class="pixel-input" type="text" id="signup-name" spellcheck="false" autocomplete="off" maxlength="16">
+      <span class="auth-error-text" id="signup-name-error"></span>
+    </div>
+    <div class="auth-field" id="signup-email-field">
+      <span class="auth-label">Email</span>
+      <input class="pixel-input" type="text" id="signup-email" spellcheck="false" autocomplete="off">
+      <span class="auth-error-text" id="signup-email-error"></span>
+    </div>
+    <div class="auth-field" id="signup-password-field">
+      <span class="auth-label">Password</span>
+      <input class="pixel-input" type="password" id="signup-password" spellcheck="false" autocomplete="off">
+      <span class="auth-error-text" id="signup-password-error"></span>
+    </div>
+    <div class="auth-field" id="signup-confirm-field">
+      <span class="auth-label">Repeat Password</span>
+      <input class="pixel-input" type="password" id="signup-confirm" spellcheck="false" autocomplete="off">
+      <span class="auth-error-text" id="signup-confirm-error"></span>
+    </div>
+    <button class="pixel-btn big auth-submit" onclick="submitSignup()"><span>Sign Up</span></button>
+  </div>
+
+  <!-- Guest Panel -->
+  <div class="auth-panel" id="auth-panel-guest">
+    <div class="auth-guest-text" id="auth-guest-text">Play without an account.<br>Your progress is saved locally and you can't log in anywhere else. However, you can log in later and transfer your progress.</div>
+    <button class="pixel-btn big auth-submit" onclick="playAsGuest()"><span>Play as Guest</span></button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     HOME SCREEN
+════════════════════════════════════ -->
+<div id="home-screen" class="screen">
+
+  <div id="player-name-tag"></div>
+  <div id="classic-stats">
+    <div class="stat-row"><span class="stat-label">Best Height:</span><span class="stat-val" id="stat-best">0</span></div>
+    <div class="stat-row"><span class="stat-label">Games:</span><span class="stat-val" id="stat-games">0</span></div>
+    <div class="stat-row"><span class="stat-label">AVG:</span><span class="stat-val" id="stat-avg">0</span></div>
+  </div>
+  <button class="pixel-btn big" onclick="startGame()">
+    <span>Start</span>
+  </button>
+
+  <div class="version-tag">v0.1.0</div>
+</div>
+
+<script>
+  // ── PIXEL CURSOR ──
+  const cursorCanvas = document.getElementById('pixel-cursor');
+  const ctx = cursorCanvas.getContext('2d');
+  const PX = 2; // size of one "pixel" in screen pixels
+
+  // Cursors defined as 2D pixel grids
+  // 1 = white, 2 = black outline, 0 = transparent
+  const CURSORS = {
+    normal: {
+      ox: 0, oy: 0, // hotspot offset
+      grid: [
+        [1,0,0,0,0,0,0,0,0,0,0],
+        [1,1,0,0,0,0,0,0,0,0,0],
+        [1,2,1,0,0,0,0,0,0,0,0],
+        [1,2,2,1,0,0,0,0,0,0,0],
+        [1,2,2,2,1,0,0,0,0,0,0],
+        [1,2,2,2,2,1,0,0,0,0,0],
+        [1,2,2,2,2,2,1,0,0,0,0],
+        [1,2,2,2,2,2,2,1,0,0,0],
+        [1,2,2,2,2,2,2,2,1,0,0],
+        [1,2,2,2,2,1,1,1,1,1,0],
+        [1,2,2,1,2,2,1,0,0,0,0],
+        [1,2,1,0,1,2,2,1,0,0,0],
+        [1,1,0,0,0,1,2,2,1,0,0],
+        [1,0,0,0,0,0,1,2,2,1,0],
+        [0,0,0,0,0,0,0,1,1,0,0],
+      ]
+    },
+    pointer: {
+      ox: 2, oy: 0,
+      grid: [
+        [0,0,1,0,0,0,0,0,0,0,0],
+        [0,0,1,1,0,0,0,0,0,0,0],
+        [0,0,1,2,1,0,0,0,0,0,0],
+        [0,0,1,2,1,0,0,0,0,0,0],
+        [0,0,1,2,1,1,1,0,0,0,0],
+        [0,0,1,2,1,2,1,1,0,0,0],
+        [1,0,1,2,1,2,1,2,1,0,0],
+        [1,1,1,2,2,2,2,2,1,0,0],
+        [0,1,2,2,2,2,2,2,1,0,0],
+        [0,0,1,2,2,2,2,2,1,0,0],
+        [0,0,1,2,2,2,2,1,0,0,0],
+        [0,0,0,1,2,2,2,1,0,0,0],
+        [0,0,0,1,2,2,1,0,0,0,0],
+        [0,0,0,0,1,1,0,0,0,0,0],
+      ]
+    },
+    text: {
+      ox: 4, oy: 0,
+      grid: [
+        [1,1,0,1,1,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [0,0,1,0,0,0,0,0,0],
+        [1,1,0,1,1,0,0,0,0],
+      ]
+    }
+  };
+
+  let mouseX = -100, mouseY = -100;
+  let cursorType = 'normal';
+
+  function drawCursor(type, x, y) {
+    const c = CURSORS[type];
+    const rows = c.grid.length;
+    const cols = c.grid[0].length;
+    cursorCanvas.width  = cols * PX;
+    cursorCanvas.height = rows * PX;
+    ctx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+    for (let r = 0; r < rows; r++) {
+      for (let col = 0; col < cols; col++) {
+        const v = c.grid[r][col];
+        if (v === 0) continue;
+        ctx.fillStyle = v === 1 ? '#ffffff' : '#000000';
+        ctx.fillRect(col * PX, r * PX, PX, PX);
+      }
+    }
+
+    cursorCanvas.style.left = (x - c.ox * PX) + 'px';
+    cursorCanvas.style.top  = (y - c.oy * PX) + 'px';
+  }
+
+  function detectCursorType(el) {
+    if (!el) return 'normal';
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return 'text';
+    if (tag === 'button' || el.closest('button') ||
+        tag === 'label' || el.closest('label') ||
+        el.closest('.tab-btn') || el.closest('.pixel-btn') ||
+        el.closest('.autocomplete-item') ||
+        el.closest('.auth-tab-btn') || el.closest('.auth-forgot') ||
+        getComputedStyle(el).cursor === 'pointer') return 'pointer';
+    return 'normal';
+  }
+
+  let cursorHidden = false;
+  let cursorHideTimer = null;
+
+  function hideCursorInGame() {
+    if (setShowCursor && setShowCursor.checked) return; // setting overrides
+    cursorHidden = true;
+    cursorCanvas.style.opacity = '0';
+  }
+
+  document.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    cursorType = detectCursorType(e.target);
+    drawCursor(cursorType, mouseX, mouseY);
+
+    if (gameRunning) {
+      // Show cursor briefly then hide again after 2s of no movement
+      cursorCanvas.style.opacity = '1';
+      cursorHidden = false;
+      clearTimeout(cursorHideTimer);
+      cursorHideTimer = setTimeout(hideCursorInGame, 2000);
+    }
+  });
+
+  document.addEventListener('mouseleave', () => {
+    cursorCanvas.style.left = '-200px';
+  });
+
+  // initial draw off-screen
+  drawCursor('normal', -200, -200);
+
+  // ── Start → Auth ──
+  const startScreen = document.getElementById('start-screen');
+  const authScreen  = document.getElementById('auth-screen');
+  const homeScreen  = document.getElementById('home-screen');
+  const flash       = document.getElementById('flash');
+  const settingsBtn = document.getElementById('settings-btn');
+
+  startScreen.addEventListener('click', () => {
+    flash.classList.add('on');
+    setTimeout(() => {
+      startScreen.classList.remove('active');
+      flash.style.transition = 'opacity 0.35s';
+      flash.classList.remove('on');
+      if (skipAuthOnStart) {
+        // Already logged in or guest — go straight to home
+        skipAuthOnStart = false;
+        goToHomeFromAuth();
+      } else {
+        document.getElementById('auth-tab-guest-label').textContent = 'Guest';
+        authScreen.classList.add('active');
+      }
+    }, 180);
+    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+  });
+
+  // ── Auth Screen ──
+  let currentUid = null;
+  let isGuest = false;
+  let currentPlayerName = '';
+
+  // ── Auto-login on page load (Firebase restores session automatically) ──
+  // ── Auto-login on page load ──
+  let skipAuthOnStart = false;
+
+  function handleAuthResult(result) {
+    if (result.uid) {
+      // Logged in
+      currentUid = result.uid;
+      isGuest = false;
+      currentPlayerName = result.data.playerName || '';
+      applyLoadedData(result.data);
+      skipAuthOnStart = true;
+    } else {
+      // Not logged in — check for guest session
+      const savedGuest = localStorage.getItem('jumpup_guest');
+      if (savedGuest) {
+        try {
+          const g = JSON.parse(savedGuest);
+          currentUid = null;
+          isGuest = true;
+          currentPlayerName = 'Guest';
+          statBest  = g.stats?.best  ?? 0;
+          statGames = g.stats?.games ?? 0;
+          statTotal = g.stats?.total ?? 0;
+          skipAuthOnStart = true;
+        } catch(e) {}
+      }
+    }
+    // Now safe to show start screen
+    startScreen.classList.add('active');
+  }
+
+  // If Firebase already resolved before this script ran, handle immediately after script finishes
+  if (window._firebaseAuthResult) {
+    setTimeout(() => handleAuthResult(window._firebaseAuthResult), 0);
+  } else {
+    // Otherwise wait for it
+    window._firebaseAuthReady = () => handleAuthResult(window._firebaseAuthResult);
+  }
+
+  function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.auth-panel').forEach(p => p.classList.remove('active'));
+    // Remove any guest notice when switching away from signup
+    const existing = document.querySelector('.guest-transfer-notice');
+    if (existing && tab !== 'signup') existing.remove();
+    document.getElementById('auth-tab-' + tab).classList.add('active');
+    const panel = document.getElementById('auth-panel-' + tab);
+    panel.classList.add('active');
+    panel.style.animation = 'none';
+    requestAnimationFrame(() => { panel.style.animation = 'panelIn 0.25s ease both'; });
+  }
+
+  function setFieldError(fieldId, errorId, msg) {
+    const field = document.getElementById(fieldId);
+    const err   = document.getElementById(errorId);
+    if (msg) {
+      field.classList.add('has-error');
+      err.textContent = msg;
+    } else {
+      field.classList.remove('has-error');
+      err.textContent = '';
+    }
+  }
+
+  function clearAuthErrors(prefix) {
+    document.querySelectorAll(`[id^="${prefix}-"][id$="-field"]`).forEach(f => f.classList.remove('has-error'));
+    document.querySelectorAll(`[id^="${prefix}-"][id$="-error"]`).forEach(e => e.textContent = '');
+  }
+
+  function goToHomeFromAuth() {
+    const nameTag = document.getElementById('player-name-tag');
+    if (isGuest || !currentUid) {
+      nameTag.classList.remove('show');
+      document.getElementById('settings-account-actions').style.display = 'none';
+      document.getElementById('settings-guest-actions').style.display = 'flex';
+    } else {
+      nameTag.textContent = currentPlayerName;
+      nameTag.classList.add('show');
+      document.getElementById('settings-account-actions').style.display = 'flex';
+      document.getElementById('settings-guest-actions').style.display = 'none';
+    }
+
+    flash.classList.add('on');
+    setTimeout(() => {
+      authScreen.classList.remove('active');
+      homeScreen.classList.add('active');
+      flash.style.transition = 'opacity 0.35s';
+      flash.classList.remove('on');
+      settingsBtn.classList.add('visible');
+    }, 180);
+    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+  }
+
+  function performLogout() {
+    window.firebaseLogout().catch(() => {});
+    localStorage.removeItem('jumpup_guest');
+    currentUid = null;
+    isGuest = false;
+    currentPlayerName = '';
+    statBest = 0; statGames = 0; statTotal = 0;
+    resetSettingsLocal();
+    elBest.textContent = '0';
+    elGames.textContent = '0';
+    elAvg.textContent = '0';
+    skipAuthOnStart = false;
+
+    settingsBtn.classList.remove('visible');
+    closeSettings();
+    homeScreen.classList.remove('active');
+    authScreen.classList.remove('active');
+    // Reset auth forms
+    document.querySelectorAll('#auth-screen .pixel-input').forEach(i => i.value = '');
+    clearAuthErrors('login');
+    clearAuthErrors('signup');
+    switchAuthTab('login');
+    document.getElementById('auth-tab-guest-label').textContent = 'Guest';
+    startScreen.classList.add('active');
+  }
+
+  // Local-only settings reset (no save) — used on logout
+  function resetSettingsLocal() {
+    setShowHeight.checked  = true;
+    setSkipTimer.checked   = false;
+    setShowBest.checked    = true;
+    setShowCursor.checked  = false;
+    setShowWarning.checked = true;
+  }
+
+  function isValidEmail(str) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+  }
+
+  // Apply data loaded from Firestore to the in-memory stats/settings
+  function applyLoadedData(data) {
+    statBest  = data.stats?.best  ?? 0;
+    statGames = data.stats?.games ?? 0;
+    statTotal = data.stats?.total ?? 0;
+
+    const s = data.settings || {};
+    setShowHeight.checked  = s.showHeight  ?? true;
+    setSkipTimer.checked   = s.skipTimer   ?? false;
+    setShowBest.checked    = s.showBest    ?? true;
+    setShowCursor.checked  = s.showCursor  ?? false;
+    setShowWarning.checked = s.showWarning ?? true;
+
+    currentPlayerName = data.playerName || '';
+
+    // Refresh stat display instantly (no animation on load)
+    elBest.textContent  = statBest;
+    elGames.textContent = statGames;
+    elAvg.textContent   = statGames ? Math.round(statTotal / statGames) : 0;
+  }
+
+  // Persist current stats + settings to Firestore (no-op for guests)
+  function saveToFirebase() {
+    if (isGuest) { saveGuestData(); return; }
+    if (!currentUid) return;
+    const settings = {
+      showHeight:  setShowHeight.checked,
+      skipTimer:   setSkipTimer.checked,
+      showBest:    setShowBest.checked,
+      showCursor:  setShowCursor.checked,
+      showWarning: setShowWarning.checked,
+    };
+    const stats = { best: statBest, games: statGames, total: statTotal };
+    window.firebaseSaveData(currentUid, stats, settings).catch(err => {
+      console.error('Failed to save data:', err);
+    });
+  }
+
+  async function submitLogin() {
+    clearAuthErrors('login');
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-password').value;
+    let hasError = false;
+
+    if (!email) {
+      setFieldError('login-email-field', 'login-email-error', 'Please enter your email or username.');
+      hasError = true;
+    }
+    if (!pass) {
+      setFieldError('login-password-field', 'login-password-error', 'Please enter your password.');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    const btn = document.querySelector('#auth-panel-login .auth-submit');
+    btn.disabled = true;
+    try {
+      const { uid, data } = await window.firebaseLogin(email, pass);
+      currentUid = uid;
+      isGuest = false;
+      applyLoadedData(data);
+      goToHomeFromAuth();
+    } catch (err) {
+      setFieldError('login-password-field', 'login-password-error', window.firebaseErrorMessage(err));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function submitSignup() {
+    clearAuthErrors('signup');
+    const name    = document.getElementById('signup-name').value.trim();
+    const email   = document.getElementById('signup-email').value.trim();
+    const pass    = document.getElementById('signup-password').value;
+    const confirm = document.getElementById('signup-confirm').value;
+    let hasError = false;
+
+    if (!name) {
+      setFieldError('signup-name-field', 'signup-name-error', 'Please enter a player name.');
+      hasError = true;
+    }
+    if (!email) {
+      setFieldError('signup-email-field', 'signup-email-error', 'Please enter your email.');
+      hasError = true;
+    } else if (!isValidEmail(email)) {
+      setFieldError('signup-email-field', 'signup-email-error', 'Please enter a valid email address.');
+      hasError = true;
+    }
+    if (!pass) {
+      setFieldError('signup-password-field', 'signup-password-error', 'Please enter a password.');
+      hasError = true;
+    } else if (pass.length < 6) {
+      setFieldError('signup-password-field', 'signup-password-error', 'Password must be at least 6 characters.');
+      hasError = true;
+    }
+    if (!confirm) {
+      setFieldError('signup-confirm-field', 'signup-confirm-error', 'Please repeat your password.');
+      hasError = true;
+    } else if (pass && confirm !== pass) {
+      setFieldError('signup-confirm-field', 'signup-confirm-error', 'Passwords do not match.');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    const btn = document.querySelector('#auth-panel-signup .auth-submit');
+    btn.disabled = true;
+    try {
+      const wasGuest = isGuest;
+      const guestStats = { best: statBest, games: statGames, total: statTotal };
+      const guestSettings = {
+        showHeight:  setShowHeight.checked,
+        skipTimer:   setSkipTimer.checked,
+        showBest:    setShowBest.checked,
+        showCursor:  setShowCursor.checked,
+        showWarning: setShowWarning.checked,
+      };
+
+      const { uid, data } = await window.firebaseSignUp(name, email, pass);
+      currentUid = uid;
+      isGuest = false;
+
+      if (wasGuest && (guestStats.games > 0 || guestStats.best > 0)) {
+        // Transfer guest progress into the new account
+        data.stats = guestStats;
+        data.settings = guestSettings;
+        await window.firebaseSaveData(uid, guestStats, guestSettings);
+        localStorage.removeItem('jumpup_guest');
+      }
+
+      applyLoadedData(data);
+      goToHomeFromAuth();
+    } catch (err) {
+      const msg = window.firebaseErrorMessage(err);
+      if (err && err.code === 'auth/email-already-in-use') {
+        setFieldError('signup-email-field', 'signup-email-error', msg);
+      } else if (err && err.code === 'auth/weak-password') {
+        setFieldError('signup-password-field', 'signup-password-error', msg);
+      } else {
+        setFieldError('signup-email-field', 'signup-email-error', msg);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function forgotPassword() {
+    clearAuthErrors('login');
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) {
+      setFieldError('login-email-field', 'login-email-error', 'Enter your email above to reset your password.');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setFieldError('login-email-field', 'login-email-error', 'Please enter a valid email address.');
+      return;
+    }
+    try {
+      await window.firebaseForgotPassword(email);
+      setFieldError('login-email-field', 'login-email-error', '');
+      const err = document.getElementById('login-email-error');
+      err.style.color = '#8f8';
+      err.textContent = 'Password reset email sent!';
+      document.getElementById('login-email-field').classList.add('has-error');
+      setTimeout(() => { err.style.color = ''; }, 4000);
+    } catch (err) {
+      setFieldError('login-email-field', 'login-email-error', window.firebaseErrorMessage(err));
+    }
+  }
+
+  function saveGuestData() {
+    if (!isGuest) return;
+    localStorage.setItem('jumpup_guest', JSON.stringify({
+      stats: { best: statBest, games: statGames, total: statTotal }
+    }));
+  }
+
+  function playAsGuest() {
+    // Load any existing guest session
+    const saved = localStorage.getItem('jumpup_guest');
+    if (saved) {
+      try {
+        const g = JSON.parse(saved);
+        statBest  = g.stats?.best  ?? 0;
+        statGames = g.stats?.games ?? 0;
+        statTotal = g.stats?.total ?? 0;
+      } catch(e) {}
+    }
+    currentUid = null;
+    isGuest = true;
+    currentPlayerName = 'Guest';
+    goToHomeFromAuth();
+  }
+
+  // Enter key submits the active form
+  document.querySelectorAll('#auth-screen .pixel-input').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const activePanel = document.querySelector('.auth-panel.active');
+        if (activePanel.id === 'auth-panel-login') submitLogin();
+        else if (activePanel.id === 'auth-panel-signup') submitSignup();
+      }
+    });
+  });
+  function pixelRipple(btn) {
+    btn.style.transform = 'translate(3px,3px)';
+    setTimeout(() => { btn.style.transform = ''; }, 100);
+  }
+
+  // ── Keyboard nav on inputs: Enter to focus next ──
+  document.querySelectorAll('.pixel-input').forEach((inp, i, arr) => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const next = inp.nextElementSibling;
+        if (next && next.tagName === 'BUTTON') next.focus();
+      }
+    });
+  });
+
+  // ── Settings ──
+  const settingsOverlay  = document.getElementById('settings-overlay');
+  const setShowHeight    = document.getElementById('set-show-height');
+  const setSkipTimer     = document.getElementById('set-skip-timer');
+  const setShowBest      = document.getElementById('set-show-best');
+  const setShowCursor    = document.getElementById('set-show-cursor');
+  const setShowWarning   = document.getElementById('set-show-warning');
+  const gameHud          = document.getElementById('game-hud');
+
+  function openSettings() {
+    settingsOverlay.classList.add('show');
+    // Pause game loop while settings is open (saves CPU/GPU)
+    if (gameRunning && !gamePaused) cancelAnimationFrame(animId);
+  }
+  function closeSettings() {
+    settingsOverlay.classList.remove('show');
+    // Resume game loop if game was running
+    if (gameRunning && !gamePaused && !countingDown) loop();
+  }
+
+  function resetSettings() {
+    setShowHeight.checked  = true;
+    setSkipTimer.checked   = false;
+    setShowBest.checked    = true;
+    setShowCursor.checked  = false;
+    setShowWarning.checked = true;
+    saveToFirebase();
+  }
+
+  // Save whenever any setting toggle changes
+  [setShowHeight, setSkipTimer, setShowBest, setShowCursor, setShowWarning].forEach(el => {
+    el.addEventListener('change', () => saveToFirebase());
+  });
+
+  // ── Rename Dialog ──
+  const renameDialog = document.getElementById('rename-dialog');
+  function openRenameDialog() {
+    document.getElementById('rename-current-text').textContent = 'Your name is currently ' + currentPlayerName;
+    document.getElementById('rename-input').value = '';
+    setFieldError('rename-field', 'rename-error', '');
+    renameDialog.classList.add('show');
+    setTimeout(() => document.getElementById('rename-input').focus(), 10);
+  }
+  function closeRenameDialog() { renameDialog.classList.remove('show'); }
+  async function confirmRename() {
+    const input = document.getElementById('rename-input');
+    const newName = input.value.trim();
+    if (!newName) {
+      setFieldError('rename-field', 'rename-error', 'Please enter a name.');
+      return;
+    }
+    try {
+      await window.firebaseRename(currentUid, newName);
+      currentPlayerName = newName;
+      document.getElementById('player-name-tag').textContent = newName;
+      closeRenameDialog();
+    } catch (err) {
+      setFieldError('rename-field', 'rename-error', window.firebaseErrorMessage(err));
+    }
+  }
+  document.getElementById('rename-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmRename();
+  });
+
+  // ── Logout Dialog ──
+  const logoutDialog = document.getElementById('logout-dialog');
+  function openLogoutDialog()  { logoutDialog.classList.add('show'); }
+  function closeLogoutDialog() { logoutDialog.classList.remove('show'); }
+  function confirmLogout() {
+    closeLogoutDialog();
+    performLogout();
+  }
+
+  // ── Delete Account Dialog ──
+  const deleteDialog = document.getElementById('delete-dialog');
+  function openDeleteDialog() {
+    document.getElementById('delete-password').value = '';
+    setFieldError('delete-password-field', 'delete-password-error', '');
+    deleteDialog.classList.add('show');
+    setTimeout(() => document.getElementById('delete-password').focus(), 10);
+  }
+  function closeDeleteDialog() { deleteDialog.classList.remove('show'); }
+  async function confirmDelete() {
+    const pass = document.getElementById('delete-password').value;
+    if (!pass) {
+      setFieldError('delete-password-field', 'delete-password-error', 'Please enter your password.');
+      return;
+    }
+    try {
+      await window.firebaseDeleteAccount(pass);
+      closeDeleteDialog();
+      performLogout();
+    } catch (err) {
+      setFieldError('delete-password-field', 'delete-password-error', window.firebaseErrorMessage(err));
+    }
+  }
+  document.getElementById('delete-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmDelete();
+  });
+  async function forgotPasswordFromDelete() {
+    setFieldError('delete-password-field', 'delete-password-error', '');
+    try {
+      await window.firebaseForgotPasswordForCurrentUser();
+      const err = document.getElementById('delete-password-error');
+      err.style.color = '#8f8';
+      err.textContent = 'Password reset email sent!';
+      document.getElementById('delete-password-field').classList.add('has-error');
+      setTimeout(() => { err.style.color = ''; }, 4000);
+    } catch (err) {
+      setFieldError('delete-password-field', 'delete-password-error', window.firebaseErrorMessage(err));
+    }
+  }
+
+  // ── Go to Auth from Settings (guest → login/signup) ──
+  function goToAuthFromSettings(tab) {
+    closeSettings();
+    settingsBtn.classList.remove('visible');
+    homeScreen.classList.remove('active');
+    document.getElementById('auth-tab-guest-label').textContent = 'Continue as a guest';
+    authScreen.classList.add('active');
+    switchAuthTab(tab);
+    if (isGuest && tab === 'signup') showGuestTransferNotice();
+  }
+
+  function showGuestTransferNotice() {
+    const panel = document.getElementById('auth-panel-signup');
+    if (!panel.querySelector('.guest-transfer-notice')) {
+      const note = document.createElement('div');
+      note.className = 'guest-transfer-notice';
+      note.textContent = 'Your guest progress will be saved to this account.';
+      panel.insertBefore(note, panel.firstChild);
+    }
+  }
+
+  // ── Stats ──
+  let statBest = 0, statGames = 0, statTotal = 0;
+  const elBest  = document.getElementById('stat-best');
+  const elGames = document.getElementById('stat-games');
+  const elAvg   = document.getElementById('stat-avg');
+  function updateStatsUI() {
+    animateCounter(elBest,  parseInt(elBest.textContent)  || 0, statBest);
+    animateCounter(elGames, parseInt(elGames.textContent) || 0, statGames);
+    const newAvg = statGames ? Math.round(statTotal / statGames) : 0;
+    animateCounter(elAvg,   parseInt(elAvg.textContent)   || 0, newAvg);
+  }
+
+  function animateCounter(el, from, to) {
+    if (from === to) return;
+    const diff = to - from;
+    const duration = 800; // ms total
+    const start = performance.now();
+    function step(now) {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      // Ease-in: starts slow, ends fast
+      const eased = t * t * t;
+      el.textContent = Math.round(from + diff * eased);
+      if (t < 1) requestAnimationFrame(step);
+      else el.textContent = to;
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ════════════════════════════════════
+  //  GAME ENGINE
+  // ════════════════════════════════════
+  const pauseOverlay    = document.getElementById('pause-overlay');
+  const pauseTitle      = document.getElementById('pause-title');
+  const countdownWrap   = document.getElementById('countdown-wrap');
+  const countdownNum    = document.getElementById('countdown-num');
+  const pauseBtns       = document.getElementById('pause-btns');
+  const menuWarning     = document.getElementById('menu-warning');
+  const noWarnToggle    = document.getElementById('no-warn-toggle');
+  const menuWarningText = document.getElementById('menu-warning-text');
+  const menuWarningConfirmBtn = document.getElementById('menu-warning-confirm-btn');
+  let countdownInterval = null;
+  let warningAction     = null; // 'menu' or 'reset'
+
+  function confirmGoHome() {
+    if (!setShowWarning.checked) { goHome(); return; }
+    warningAction = 'menu';
+    menuWarningText.textContent = 'Your score will not count if you go back to the menu.';
+    menuWarningConfirmBtn.querySelector('span').textContent = 'Menu';
+    noWarnToggle.checked = false;
+    menuWarning.classList.add('show');
+  }
+  function confirmReset() {
+    if (!setShowWarning.checked) { restartGame(); return; }
+    warningAction = 'reset';
+    menuWarningText.textContent = 'Your score will not count if you reset.';
+    menuWarningConfirmBtn.querySelector('span').textContent = 'Reset';
+    noWarnToggle.checked = false;
+    menuWarning.classList.add('show');
+  }
+  function closeWarning() {
+    if (noWarnToggle.checked) { setShowWarning.checked = false; saveToFirebase(); }
+    menuWarning.classList.remove('show');
+  }
+  function goHomeFromWarning() {
+    if (noWarnToggle.checked) { setShowWarning.checked = false; saveToFirebase(); }
+    menuWarning.classList.remove('show');
+    if (warningAction === 'reset') restartGame();
+    else goHome();
+  }
+
+  function pauseGame() {
+    if (!gameRunning || gamePaused || countingDown) return;
+    gamePaused = true;
+    cancelAnimationFrame(animId);
+    clearTimeout(cursorHideTimer);
+    cursorCanvas.style.opacity = '1';
+    // Close dev console if open
+    devConsoleOpen = false;
+    devConsole.classList.remove('show');
+    pauseOverlay.classList.add('show');
+    pauseTitle.style.display = '';
+    countdownWrap.style.display = 'none';
+    pauseBtns.style.display = 'flex';
+    keys = {};
+  }
+
+  function resumeGame() {
+    if (!gamePaused) return;
+    gamePaused = false;
+    menuWarning.classList.remove('show');
+
+    // Skip timer setting — go straight to gameplay
+    if (setSkipTimer.checked) {
+      countingDown = false;
+      pauseOverlay.classList.remove('show');
+      hideCursorInGame();
+      keys = {};
+      loop();
+      return;
+    }
+
+    countingDown = true;
+    pauseTitle.style.display = 'none';
+    pauseBtns.style.display = 'none';
+    countdownWrap.style.display = 'flex';
+
+    let count = 3;
+    countdownNum.textContent = count;
+    // re-trigger pop animation
+    countdownNum.style.animation = 'none';
+    requestAnimationFrame(() => { countdownNum.style.animation = 'countPop 0.4s cubic-bezier(.17,.67,.35,1.4)'; });
+
+    countdownInterval = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        startAfterCountdown();
+      } else {
+        countdownNum.textContent = count;
+        countdownNum.style.animation = 'none';
+        requestAnimationFrame(() => { countdownNum.style.animation = 'countPop 0.4s cubic-bezier(.17,.67,.35,1.4)'; });
+      }
+    }, 1000);
+  }
+
+  function skipCountdown() {
+    if (!countingDown) return;
+    clearInterval(countdownInterval);
+    startAfterCountdown();
+  }
+
+  function startAfterCountdown() {
+    clearInterval(countdownInterval);
+    countingDown = false;
+    pauseOverlay.classList.remove('show');
+    hideCursorInGame();
+    keys = {};
+    loop();
+  }
+  const gameScreen  = document.getElementById('game-screen');
+  const gameCanvas  = document.getElementById('game-canvas');
+  const gctx        = gameCanvas.getContext('2d');
+  const hudScore    = document.getElementById('hud-score');
+  const gameOverlay = document.getElementById('game-overlay');
+  const overlayTitle = document.getElementById('overlay-title');
+  const overlayScore = document.getElementById('overlay-score');
+
+  // ── Developer Mode ──
+  let devMode = false;
+  let devFlying = false;
+  let devFlashTimer = 0;
+  let devConsoleOpen = false;
+  let devCmdErrorTimer = null;
+  let devCodeBuffer = '';
+  let devCodeTimeout = null;
+
+  const devLabel    = document.getElementById('dev-label');
+  const devConsole  = document.getElementById('dev-console');
+  const devInput    = document.getElementById('dev-input');
+  const devFeedback = document.getElementById('dev-feedback');
+  const devCmdError = document.getElementById('dev-cmd-error');
+
+  function startDevCodeListener() {
+    devCodeBuffer = '';
+    clearTimeout(devCodeTimeout);
+    devCodeTimeout = setTimeout(() => { devCodeBuffer = ''; }, 3000);
+  }
+
+  function handleDevKey(key) {
+    if (!gameRunning || gamePaused || devConsoleOpen) return;
+    devCodeBuffer += key;
+    if (devCodeBuffer.includes('5615')) {
+      devMode = true;
+      devCodeBuffer = '';
+      devLabel.style.display = 'block';
+    }
+    if (devCodeBuffer.length > 4) devCodeBuffer = devCodeBuffer.slice(-4);
+  }
+
+  function runDevCommand(cmd) {
+    cmd = cmd.trim().toLowerCase();
+
+    // go to <height>
+    const goToMatch = cmd.match(/^go to (-?\d+)$/);
+    if (goToMatch) {
+      const targetHeight = parseInt(goToMatch[1]);
+      cameraY = targetHeight * 10;
+      platforms = makePlatforms(cameraY);
+      saws = makeSaws(platforms);
+      player.y = H / 2 - player.h;
+      player.x = W / 2 - player.w / 2;
+      player.vy = 0;
+      score = targetHeight;
+      devFlying = true;
+      closeDevConsole(); return;
+    }
+
+    // Parse optional quantity: "spawn X <thing>" or "spawn <thing>"
+    let quantity = 1;
+    let spawnCmd = cmd;
+    const quantMatch = cmd.match(/^spawn (\d+)\s+(.+)$/);
+    const simpleSpawnMatch = cmd.match(/^spawn (\d+)$/);
+
+    if (quantMatch) {
+      quantity = Math.min(parseInt(quantMatch[1]), 10);
+      if (parseInt(quantMatch[1]) > 10) {
+        showDevError('Max 10');
+        closeDevConsole(); return;
+      }
+      spawnCmd = 'spawn ' + quantMatch[2];
+    } else if (simpleSpawnMatch) {
+      showDevError('Max 10');
+      closeDevConsole(); return;
+    }
+
+    // spawn spike
+    if (spawnCmd === 'spawn spike') {
+      if (!quantMatch) { showDevError('Enter quantity'); closeDevConsole(); return; }
+      for (let i = 0; i < quantity; i++) {
+        const wx = 30 + Math.random() * (W - 60);
+        spikeWarnings.push({ x: wx, timer: 0, blinkOn: true });
+      }
+      closeDevConsole(); return;
+    }
+
+    // spawn saw
+    if (spawnCmd === 'spawn saw') {
+      if (!quantMatch) { showDevError('Enter quantity'); closeDevConsole(); return; }
+      for (let i = 0; i < quantity; i++) {
+        const pw = 80 + Math.random() * 60;
+        const px = Math.random() * (W - pw - 20) + 10;
+        const worldY = player.y - cameraY - 80 - i * 100 - Math.random() * 60;
+        const plat = { x: px, y: worldY, w: pw, h: 12, unstable: false, moving: false,
+                       shaking: false, shakeTimer: 0, broken: false, moveOrigin: px,
+                       moveRange: 0, moveDir: 1, moveSpeed: 0 };
+        platforms.push(plat);
+        saws.push({ platX: px, platW: pw, platY: worldY,
+                    x: px + pw / 2, dir: 1, speed: 0.5 + Math.random() * 0.4 });
+      }
+      closeDevConsole(); return;
+    }
+
+    // spawn moving platform
+    if (spawnCmd === 'spawn moving platform') {
+      if (!quantMatch) { showDevError('Enter quantity'); closeDevConsole(); return; }
+      for (let i = 0; i < quantity; i++) {
+        const pw = 80 + Math.random() * 60;
+        const px = Math.random() * (W - pw - 20) + 10;
+        const worldY = player.y - cameraY - 80 - i * 100 - Math.random() * 60;
+        const moveRange = pw + 40 + Math.random() * (W * 0.25);
+        const moveSpeed = 0.6 + Math.random() * 0.8;
+        platforms.push({ x: px, y: worldY, w: pw, h: 12, unstable: false, moving: true,
+                         shaking: false, shakeTimer: 0, broken: false,
+                         moveOrigin: px, moveRange, moveDir: 1, moveSpeed });
+      }
+      closeDevConsole(); return;
+    }
+
+    // spawn unstable platform
+    if (spawnCmd === 'spawn unstable platform') {
+      if (!quantMatch) { showDevError('Enter quantity'); closeDevConsole(); return; }
+      for (let i = 0; i < quantity; i++) {
+        const pw = 60 + Math.random() * 80;
+        const px = Math.random() * (W - pw - 20) + 10;
+        const worldY = player.y - cameraY - 80 - i * 100 - Math.random() * 60;
+        platforms.push({ x: px, y: worldY, w: pw, h: 12, unstable: true, moving: false,
+                         shaking: false, shakeTimer: 0, broken: false,
+                         moveOrigin: px, moveRange: 0, moveDir: 1, moveSpeed: 0 });
+      }
+      closeDevConsole(); return;
+    }
+
+    // Unknown
+    showDevError('Command not found');
+    closeDevConsole();
+  }
+
+  function showDevError(msg) {
+    clearTimeout(devCmdErrorTimer);
+    devCmdError.textContent = msg;
+    devCmdError.style.display = 'block';
+    devCmdErrorTimer = setTimeout(() => { devCmdError.style.display = 'none'; }, 2000);
+  }
+
+  function closeDevConsole() {
+    devConsoleOpen = false;
+    devConsole.classList.remove('show');
+    devAutocomplete.innerHTML = '';
+  }
+
+  function toggleDevConsole() {
+    if (!devMode || !gameRunning || gamePaused) return;
+    devConsoleOpen = !devConsoleOpen;
+    if (devConsoleOpen) {
+      devConsole.classList.add('show');
+      devInput.value = '';
+      devFeedback.textContent = '';
+      setTimeout(() => devInput.focus(), 10);
+    } else {
+      closeDevConsole();
+    }
+  }
+
+  const devAutocomplete = document.getElementById('dev-autocomplete');
+
+  const DEV_COMMANDS = [
+    'go to x',
+    'spawn x spike',
+    'spawn x saw',
+    'spawn x moving platform',
+    'spawn x unstable platform',
+  ];
+
+  function updateAutocomplete(val) {
+    devAutocomplete.innerHTML = '';
+    const trimmed = val.toLowerCase().trimEnd();
+    if (!trimmed) return;
+
+    // If user typed a literal " x" (not a number), hide all suggestions
+    if (/\bx\b/.test(trimmed)) return;
+
+    // Replace any number in input with "x" for matching against command templates
+    const normalized = trimmed.replace(/\b\d+\b/g, 'x');
+
+    const matches = DEV_COMMANDS.filter(c => c.startsWith(normalized) || c.startsWith(trimmed));
+    if (matches.length === 0) return;
+    matches.forEach(m => {
+      const el = document.createElement('div');
+      el.className = 'autocomplete-item';
+      el.textContent = m;
+      el.addEventListener('mousedown', e => {
+        e.preventDefault(); // don't blur the input
+        applyAutocomplete(m);
+      });
+      devAutocomplete.appendChild(el);
+    });
+  }
+
+  function applyAutocomplete(suggestion) {
+    const current = devInput.value.toLowerCase().trimEnd();
+    // Check if current input already has a number in place of x
+    const hasNumber = /\b\d+\b/.test(current);
+
+    if (suggestion.includes(' x ') || suggestion.endsWith(' x')) {
+      if (hasNumber) {
+        // Fill everything, replacing x with the number the user typed
+        const num = current.match(/\b\d+\b/)?.[0] || '';
+        const filled = suggestion.replace(' x ', ` ${num} `).replace(/ x$/, ` ${num}`);
+        devInput.value = filled;
+      } else {
+        // No number yet — fill only the prefix before " x"
+        const prefix = suggestion.split(' x')[0] + ' ';
+        devInput.value = prefix;
+      }
+    } else {
+      // No x placeholder — just fill the whole thing
+      devInput.value = suggestion;
+    }
+
+    devInput.focus();
+    updateAutocomplete(devInput.value);
+  }
+
+  devInput.addEventListener('input', () => {
+    updateAutocomplete(devInput.value);
+  });
+
+  devInput.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const last = devAutocomplete.lastChild;
+      if (last) applyAutocomplete(last.textContent);
+      return;
+    }
+    if (e.key === 'Enter') {
+      const val = devInput.value.trim();
+      devInput.value = '';
+      devAutocomplete.innerHTML = '';
+      if (val) runDevCommand(val);
+      else closeDevConsole();
+    }
+    if (e.key === 'Escape') closeDevConsole();
+  });
+
+  // ── Easter Egg ──
+  const easterEl = document.getElementById('easter-msg');
+  const EASTER_MESSAGES = [
+    { delay: 30, text: "How long do you plan to do this for?" },
+    { delay: 2,  text: "Why are you doing that anyway?" },
+    { delay: 2,  text: "You won't stop doing that, am I right?" },
+    { delay: 20, text: "Still going?" },
+    { delay: 2,  text: "Most people would have stopped by now." },
+    { delay: 5,  text: "Are you expecting something to happen?" },
+    { delay: 5,  text: "At this point, you're doing science." },
+    { delay: 2,  text: "Results so far: Subject refuses to stop." },
+    { delay: 2,  text: "Conclusion: Subject definitely refuses to stop." },
+    { delay: 5,  text: "Shouldn't you be outside enjoying nature?" },
+    { delay: 2,  text: "Actually, no. Then you wouldn't be playing my game." },
+    { delay: 2,  text: "Forget what I said." },
+    { delay: 10, text: "Aren't you getting bored?" },
+    { delay: 2,  text: "No?" },
+    { delay: 1,  text: "Fair enough." },
+    { delay: 30, text: "The developers didn't expect anyone to stay this long." },
+    { delay: 10, text: "-Oliver Jochberg-" },
+  ];
+  let easterTimer = 0;
+  let easterIndex = -1;
+  let easterActive = false;  // true while a message is visible/fading (pause timer)
+  let easterLastDir = 0;
+  let easterFadeTimeout = null;
+
+  function resetEaster() {
+    easterTimer = 0;
+    easterIndex = -1;
+    easterActive = false;
+    easterLastDir = 0;
+    clearTimeout(easterFadeTimeout);
+    easterEl.classList.remove('show', 'visible');
+  }
+
+  function showEasterMessage(idx) {
+    if (idx >= EASTER_MESSAGES.length) return;
+    easterIndex = idx;
+    easterActive = true;
+    easterTimer = 0;
+    const msg = EASTER_MESSAGES[idx];
+    easterEl.textContent = msg.text;
+    easterEl.classList.add('show');
+    requestAnimationFrame(() => requestAnimationFrame(() => easterEl.classList.add('visible')));
+
+    // Fade out after 4s, then mark inactive so timer can start for next message
+    easterFadeTimeout = setTimeout(() => {
+      easterEl.classList.remove('visible');
+      setTimeout(() => {
+        easterEl.classList.remove('show');
+        easterActive = false; // timer resumes now
+        easterTimer = 0;      // fresh start for next delay
+      }, 600);
+    }, 4000);
+  }
+
+  // ── Constants ──
+  const GRAVITY     = 0.45;
+  const JUMP_FORCE  = -11;
+  const MOVE_SPEED  = 4;
+  const SAW_R       = 12;  // saw radius
+  const SAW_MIN_PLAT = SAW_R * 2 + 20; // minimum platform width for a saw to spawn
+  const P_W_NORMAL  = 22;  // player width normal
+  const P_H_NORMAL  = 38;  // player height normal
+  const P_W_DUCK    = 34;  // player width ducked
+  const P_H_DUCK    = 20;  // player height ducked
+
+  // ── State ──
+  let W, H;
+  let player, cameraY, platforms, saws, particles, spikes, spikeWarnings, spikeTimer, nextSpikeInterval, keys, score, gameRunning, gamePaused, countingDown, animId, sawAngle;
+
+  const SPIKE_SCORE_THRESHOLD = 500;
+  const SPIKE_WARN_TIME = 2.5;  // seconds before spike falls
+  const SPIKE_SPEED = 10;
+  const SPIKE_W = 20;
+  const SPIKE_H = 30;
+  const SPIKE_INTERVAL = 6;     // min seconds between spike spawns
+  const SPIKE_INTERVAL_MAX = 12; // max seconds
+
+  function resizeCanvas() {
+    W = gameCanvas.width  = window.innerWidth;
+    H = gameCanvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    if (gameRunning) drawFrame();
+  });
+
+  // ── Platform generation ──
+  function makePlatforms(startCameraY) {
+    const plats = [];
+    const camY = startCameraY || 0;
+    // Ground always at world bottom
+    plats.push({ x: 0, y: H - 20, w: W, h: 20, unstable: false, moving: false,
+                 shaking: false, shakeTimer: 0, broken: false, moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0 });
+    // Generate platforms above current camera position
+    let py = (H - 120) - camY;
+    for (let i = 0; i < 120; i++) {
+      const pw = 60 + Math.random() * 80;
+      const px = Math.random() * (W - pw - 20) + 10;
+      const gap = 70 + Math.random() * 60 + Math.min(i, 60) * 0.5;
+      const platScore = Math.round(-(py + camY) / 10);
+      const canUnstable = platScore >= 200;
+      const canMoving   = platScore >= 400;
+      const moving   = canMoving   && Math.random() < 0.30;
+      const unstable = !moving && canUnstable && Math.random() < 0.35;
+      const moveSpeed = moving ? (0.6 + Math.random() * 0.8) : 0;
+      const moveRange = moving ? (pw + 40 + Math.random() * (W * 0.25)) : 0;
+      plats.push({
+        x: px, y: py, w: pw, h: 12,
+        unstable, shaking: false, shakeTimer: 0, broken: false,
+        moving, moveOrigin: px, moveRange, moveDir: Math.random() < 0.5 ? 1 : -1, moveSpeed,
+      });
+      py -= gap;
+    }
+    return plats;
+  }
+
+  // Score threshold at which saws start (world-Y offset equivalent)
+  const SAW_SCORE_THRESHOLD = 300;
+
+  function makeSaws(plats) {
+    const result = [];
+    for (const p of plats) {
+      if (p.w < W) { // skip ground
+        // height at which this platform sits (world units) — approx score equivalent
+        const platScore = Math.round(-p.y / 10);
+        if (platScore >= SAW_SCORE_THRESHOLD && p.w >= SAW_MIN_PLAT && !p.unstable && !p.moving) {
+          if (Math.random() < 0.2) { // 20% chance per eligible platform
+            result.push({
+              platX: p.x,
+              platW: p.w,
+              platY: p.y,
+              x: p.x + SAW_R,
+              dir: 1,
+              speed: 0.5 + Math.random() * 0.4,
+            });
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  function initGame() {
+    resizeCanvas();
+    keys = {};
+    score = 0;
+    platforms = makePlatforms();
+    saws = makeSaws(platforms);
+    sawAngle = 0;
+    particles = [];
+    spikes = [];
+    spikeWarnings = [];
+    spikeTimer = 0;
+    nextSpikeInterval = SPIKE_INTERVAL + Math.random() * (SPIKE_INTERVAL_MAX - SPIKE_INTERVAL);
+    resetEaster();
+    cameraY = 0; // world-to-screen offset (positive = camera moved up)
+
+    player = {
+      x: W / 2 - P_W_NORMAL / 2,
+      y: H - 20 - P_H_NORMAL,
+      vx: 0,
+      vy: 0,
+      w: P_W_NORMAL,
+      h: P_H_NORMAL,
+      onGround: false,
+      ducking: false,
+      jumpsLeft: 1,
+      _upHeld: false,
+      scaleX: 1, scaleY: 1,   // squash & stretch
+      _prevOnGround: false,
+      maxY: H - 20 - P_H_NORMAL, // highest world-Y reached (lowest number = highest)
+    };
+
+    gameRunning = true;
+    gamePaused = false;
+    countingDown = false;
+    devFlying = false;
+    devConsoleOpen = false;
+    devConsole.classList.remove('show');
+    devCmdError.style.display = 'none';
+    if (!devMode) startDevCodeListener();
+    gameOverlay.classList.remove('show');
+    pauseOverlay.classList.remove('show');
+  }
+
+  // ── Input ──
+  document.addEventListener('keydown', e => {
+    if (keys) keys[e.code] = true;
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code) && gameRunning && !gamePaused) {
+      e.preventDefault();
+    }
+    // Escape = pause (only during active gameplay)
+    if (e.code === 'Escape' && gameRunning && !gamePaused && !countingDown) {
+      e.preventDefault();
+      pauseGame();
+    }
+    // Space = skip countdown
+    if (e.code === 'Space' && countingDown) {
+      e.preventDefault();
+      skipCountdown();
+    }
+    // Space = Continue on pause menu
+    if (e.code === 'Space' && gamePaused && !countingDown) {
+      e.preventDefault();
+      resumeGame();
+    }
+    // Space = Retry on game over
+    if (e.code === 'Space' && !gameRunning && !gamePaused && gameScreen.style.display === 'block') {
+      e.preventDefault();
+      restartGame();
+    }
+    // Dev mode: toggle fly with Space
+    if (e.code === 'Space' && devMode && gameRunning && !gamePaused && !devConsoleOpen) {
+      devFlying = !devFlying;
+    }
+    // Dev mode: open console with T
+    if (e.code === 'KeyT' && devMode && gameRunning && !gamePaused && !countingDown) {
+      e.preventDefault();
+      toggleDevConsole();
+    }
+    // Dev code detection: digit keys
+    if (e.code.startsWith('Digit') && gameRunning && !devConsoleOpen) {
+      handleDevKey(e.key);
+    }
+  });
+  document.addEventListener('keyup', e => { if (keys) keys[e.code] = false; });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && gameRunning && !gamePaused && !countingDown) pauseGame();
+  });
+
+  window.addEventListener('blur', () => {
+    if (gameRunning && !gamePaused && !countingDown) pauseGame();
+  });
+
+  function isDown(codes) { return codes.some(c => keys[c]); }
+  function update() {
+    if (!gameRunning) return;
+
+    const left  = isDown(['KeyA', 'ArrowLeft']);
+    const right = isDown(['KeyD', 'ArrowRight']);
+    const up    = isDown(['KeyW', 'ArrowUp']);
+    const duck  = isDown(['KeyS', 'ArrowDown']);
+
+    // Ducking — on ground: full duck; in air: duck shape but stronger gravity
+    const airDuck = duck && !player.onGround && !(devMode && devFlying);
+    player.ducking = duck && !(devMode && devFlying);
+
+    if (player.ducking) {
+      if (player.w !== P_W_DUCK) {
+        player.x -= (P_W_DUCK - P_W_NORMAL) / 2;
+        if (player.onGround) player.y += P_H_NORMAL - P_H_DUCK;
+        player.w = P_W_DUCK;
+        player.h = P_H_DUCK;
+      }
+    } else {
+      if (player.w !== P_W_NORMAL) {
+        player.x += (P_W_DUCK - P_W_NORMAL) / 2;
+        if (player.onGround) player.y -= P_H_NORMAL - P_H_DUCK;
+        player.w = P_W_NORMAL;
+        player.h = P_H_NORMAL;
+      }
+    }
+
+    // Horizontal — slower while ducking, faster while running
+    const speed = player.ducking ? MOVE_SPEED * 0.5 : MOVE_SPEED;
+    if (left)       player.vx = -speed;
+    else if (right) player.vx = speed;
+    else            player.vx *= 0.75;
+
+    // Jump — double jump allowed
+    if (up && !player._upHeld) {
+      if (player.onGround) {
+        player.vy = JUMP_FORCE;
+        player.onGround = false;
+        player.jumpsLeft = 1;
+        // Stretch on jump
+        player.scaleX = 0.65; player.scaleY = 1.4;
+      } else if (player.jumpsLeft > 0) {
+        player.vy = JUMP_FORCE;
+        player.jumpsLeft--;
+        // Stretch on double jump (slightly less)
+        player.scaleX = 0.75; player.scaleY = 1.25;
+      }
+    }
+    player._upHeld = up;
+
+    // Squash on landing
+    const wasOnGround = player._prevOnGround;
+    player._prevOnGround = player.onGround;
+
+    // Gravity — stronger when ducking in air
+    player.vy += airDuck ? GRAVITY * 2.2 : GRAVITY;
+
+    // Dev mode: flying overrides gravity, W/S control vertical
+    if (devMode && devFlying) {
+      player.vy = 0;
+      player.onGround = false;
+      const FLY_SPEED = 5;
+      if (up)   player.y -= FLY_SPEED;
+      if (duck) player.y += FLY_SPEED;
+    }
+
+    // Move
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Wrap horizontally
+    if (player.x + player.w < 0)  player.x = W;
+    if (player.x > W)             player.x = -player.w;
+
+    // Platform collision (only falling down)
+    player.onGround = false;
+    if (player.vy >= 0) {
+      for (const p of platforms) {
+        if (p.broken) continue;
+        const screenPY = p.y + cameraY;
+
+        // For moving platforms, also test the wrapped copy
+        const xOffsets = [0];
+        if (p.moving) {
+          if (p.x < 0)       xOffsets.push(W);
+          if (p.x + p.w > W) xOffsets.push(-W);
+        }
+
+        let hit = false;
+        for (const dx of xOffsets) {
+          const px2 = p.x + dx;
+          if (
+            player.x + player.w > px2 &&
+            player.x < px2 + p.w &&
+            player.y + player.h > screenPY &&
+            player.y + player.h < screenPY + p.h + player.vy + 1
+          ) {
+            player.y = screenPY - player.h;
+            player.vy = 0;
+            player.onGround = true;
+            player.jumpsLeft = 1;
+            if (!wasOnGround) { player.scaleX = 1.35; player.scaleY = 0.65; }
+            if (p.moving) player.x += p.moveDir * p.moveSpeed;
+            if (p.unstable && !p.shaking) { p.shaking = true; p.shakeTimer = 0; }
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+    }
+
+    // Update moving platforms
+    for (const p of platforms) {
+      if (!p.moving) continue;
+      p.x += p.moveDir * p.moveSpeed;
+      if (p.x >= p.moveOrigin + p.moveRange) { p.x = p.moveOrigin + p.moveRange; p.moveDir = -1; }
+      if (p.x <= p.moveOrigin)               { p.x = p.moveOrigin;               p.moveDir =  1; }
+    }
+
+    // Update unstable platform timers
+    const dt = 1 / 60;
+    for (const p of platforms) {
+      if (p.shaking && !p.broken) {
+        p.shakeTimer += dt;
+        if (p.shakeTimer >= 1.0) {
+          p.broken = true;
+          // Spawn particles at platform position
+          const sy = p.y + cameraY;
+          const count = Math.floor(p.w / 8);
+          for (let i = 0; i < count; i++) {
+            particles.push({
+              x: p.x + Math.random() * p.w,
+              y: sy,
+              vx: (Math.random() - 0.5) * 3,
+              vy: -Math.random() * 3 - 1,
+              life: 1,
+              size: 2 + Math.floor(Math.random() * 3),
+            });
+          }
+        }
+      }
+    }
+
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const pt = particles[i];
+      pt.x  += pt.vx;
+      pt.y  += pt.vy;
+      pt.vy += 0.18;
+      pt.life -= 0.04;
+      if (pt.life <= 0) particles.splice(i, 1);
+    }
+
+    // Camera: scroll up when player reaches upper 35% of screen
+    const screenPlayerY = player.y; // player.y is already in screen space
+    if (screenPlayerY < H * 0.35) {
+      const shift = H * 0.35 - screenPlayerY;
+      player.y += shift;
+      cameraY  += shift;
+    }
+
+    // Score = how high camera has moved (in pixels, /10 for cleaner number)
+    score = Math.round(cameraY / 10);
+    hudScore.textContent = score;
+    gameHud.style.display = setShowHeight.checked ? '' : 'none';
+
+    // Lerp scale back to normal
+    player.scaleX += (1 - player.scaleX) * 0.18;
+    player.scaleY += (1 - player.scaleY) * 0.18;
+
+    // Dev flash timer
+    if (devFlashTimer > 0) devFlashTimer -= 1 / 60;
+
+    // ── Saws ──
+    sawAngle += 0.08;
+    for (const s of saws) {
+      s.x += s.dir * s.speed;
+      const right_edge = s.platX + s.platW - SAW_R;
+      const left_edge  = s.platX + SAW_R;
+      if (s.x >= right_edge) { s.x = right_edge; s.dir = -1; }
+      if (s.x <= left_edge)  { s.x = left_edge;  s.dir =  1; }
+
+      const sy = s.platY + cameraY - SAW_R - 14;
+      const nearX = Math.max(player.x, Math.min(s.x, player.x + player.w));
+      const nearY = Math.max(player.y, Math.min(sy, player.y + player.h));
+      const dx = s.x - nearX, dy = sy - nearY;
+      if (dx * dx + dy * dy < SAW_R * SAW_R) {
+        endGame();
+      }
+    }
+
+    // Cull platforms that are far below the visible screen
+    platforms = platforms.filter(p => (p.y + cameraY) < H + 200);
+
+    // ── Spikes ──
+    if (score >= SPIKE_SCORE_THRESHOLD) {
+      const dt2 = 1 / 60;
+      spikeTimer += dt2;
+      if (spikeTimer >= nextSpikeInterval) {
+        spikeTimer = 0;
+        nextSpikeInterval = SPIKE_INTERVAL + Math.random() * (SPIKE_INTERVAL_MAX - SPIKE_INTERVAL);
+        const wx = 30 + Math.random() * (W - 60);
+        spikeWarnings.push({ x: wx, timer: 0, blinkOn: true });
+      }
+    }
+
+    // Update warnings → spawn spike when timer expires
+    for (let i = spikeWarnings.length - 1; i >= 0; i--) {
+      const w = spikeWarnings[i];
+      w.timer += 1 / 60;
+      w.blinkOn = Math.floor(w.timer * 6) % 2 === 0;
+      if (w.timer >= SPIKE_WARN_TIME) {
+        spikes.push({ x: w.x, y: -SPIKE_H - 10, vy: 0 });
+        spikeWarnings.splice(i, 1);
+      }
+    }
+
+    // Update falling spikes
+    for (let i = spikes.length - 1; i >= 0; i--) {
+      const s = spikes[i];
+      s.vy += 0.5;
+      s.y += s.vy;
+      // Collision with player
+      if (
+        s.x - SPIKE_W / 2 < player.x + player.w &&
+        s.x + SPIKE_W / 2 > player.x &&
+        s.y < player.y + player.h &&
+        s.y + SPIKE_H > player.y
+      ) {
+        endGame(); return;
+      }
+      // Remove when off screen
+      if (s.y - SPIKE_H > H) spikes.splice(i, 1);
+    }
+
+    // Death: fell below screen
+    if (player.y > H + 60) {
+      endGame();
+    }
+
+    // ── Easter Egg: track horizontal movement at ground level ──
+    if (gameRunning && score <= 5 && player.onGround) {
+      const movingLeft  = isDown(['KeyA', 'ArrowLeft']);
+      const movingRight = isDown(['KeyD', 'ArrowRight']);
+      const dir = movingLeft ? -1 : movingRight ? 1 : 0;
+
+      if (dir !== 0 && (dir === easterLastDir || easterLastDir === 0)) {
+        easterLastDir = dir;
+        // Only tick timer when no message is currently showing
+        if (!easterActive) {
+          easterTimer += 1 / 60;
+          const nextIdx = easterIndex + 1;
+          if (nextIdx < EASTER_MESSAGES.length) {
+            const needed = EASTER_MESSAGES[nextIdx].delay;
+            if (easterTimer >= needed) {
+              showEasterMessage(nextIdx);
+            }
+          }
+        }
+      } else {
+        // Direction changed or stopped — reset timer but keep index
+        easterTimer = 0;
+        easterLastDir = dir !== 0 ? dir : 0;
+      }
+    } else if (score > 5) {
+      resetEaster();
+    }
+  }
+
+  // ── Draw ──
+  function drawFrame() {
+    gctx.clearRect(0, 0, W, H);
+    gctx.fillStyle = '#000';
+    gctx.fillRect(0, 0, W, H);
+
+    // ── Best Height Line ──
+    if (statBest > 0 && setShowBest.checked) {
+      // Convert statBest score to screen Y: score = cameraY/10, so worldY = -statBest*10, screenY = worldY + cameraY
+      const bestScreenY = (-statBest * 10) + cameraY;
+      if (bestScreenY > 0 && bestScreenY < H) {
+        gctx.save();
+        gctx.setLineDash([8, 6]);
+        gctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        gctx.lineWidth = 1;
+        gctx.beginPath();
+        gctx.moveTo(0, bestScreenY);
+        gctx.lineTo(W, bestScreenY);
+        gctx.stroke();
+        gctx.setLineDash([]);
+        // Label at right edge below the line
+        gctx.font = '7px "Press Start 2P", monospace';
+        gctx.fillStyle = 'rgba(255,255,255,0.55)';
+        gctx.textAlign = 'right';
+        gctx.fillText('Best height', W - 8, bestScreenY + 12);
+        gctx.restore();
+      }
+    }
+
+    // Platforms
+    for (const p of platforms) {
+      if (p.broken) continue;
+      let sy = p.y + cameraY;
+      if (sy > H + 20 || sy + p.h < -20) continue;
+
+      let ox = 0;
+      if (p.shaking) {
+        // shake intensifies as timer approaches 1s
+        const intensity = Math.min(p.shakeTimer / 0.6, 1) * 3;
+        ox = (Math.random() - 0.5) * intensity * 2;
+      }
+
+      if (p.moving) {
+        // Dashed path showing actual travel range
+        const pathY = sy + p.h / 2;
+        gctx.setLineDash([4, 5]);
+        gctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        gctx.lineWidth = 1;
+        gctx.beginPath();
+        gctx.moveTo(p.moveOrigin, pathY);
+        gctx.lineTo(p.moveOrigin + p.moveRange + p.w, pathY);
+        gctx.stroke();
+        gctx.setLineDash([]);
+
+        // Draw platform, plus wrapped copy only if it overlaps a screen edge
+        const offsets = [0];
+        if (p.x < 0)       offsets.push(W);
+        if (p.x + p.w > W) offsets.push(-W);
+
+        for (const dx of offsets) {
+          const rx = p.x + dx;
+          gctx.fillStyle = '#fff';
+          gctx.fillRect(rx + ox, sy, p.w, p.h);
+          gctx.fillStyle = '#666';
+          gctx.fillRect(rx + ox, sy, p.w, 2);
+        }
+      } else if (p.unstable) {
+        // Dashed / cracked look: alternating segments
+        const segW = 10, gap = 4;
+        const alpha = p.shaking ? Math.max(0.3, 1 - p.shakeTimer * 0.6) : 1;
+        gctx.globalAlpha = alpha;
+        gctx.fillStyle = '#fff';
+        for (let sx2 = p.x; sx2 < p.x + p.w; sx2 += segW + gap) {
+          const w = Math.min(segW, p.x + p.w - sx2);
+          gctx.fillRect(sx2 + ox, sy, w, p.h);
+        }
+        gctx.globalAlpha = 1;
+      } else {
+        gctx.fillStyle = '#fff';
+        gctx.fillRect(p.x + ox, sy, p.w, p.h);
+        gctx.fillStyle = '#aaa';
+        gctx.fillRect(p.x + ox, sy, p.w, 2);
+      }
+    }
+
+    // ── Particles ──
+    for (const pt of particles) {
+      gctx.globalAlpha = pt.life;
+      gctx.fillStyle = '#fff';
+      gctx.fillRect(Math.round(pt.x), Math.round(pt.y), pt.size, pt.size);
+    }
+    gctx.globalAlpha = 1;
+
+    // ── Saws ──
+    for (const s of saws) {
+      const sx = s.x;
+      const sy = s.platY + cameraY - SAW_R - 14;
+      if (sy > H + 40 || sy < -40) continue;
+
+      gctx.save();
+      gctx.translate(sx, sy);
+      gctx.rotate(sawAngle * 3);
+
+      // Outer teeth (8 triangular spikes)
+      const teeth = 8;
+      gctx.fillStyle = '#fff';
+      for (let t = 0; t < teeth; t++) {
+        const a = (t / teeth) * Math.PI * 2;
+        const a2 = ((t + 0.5) / teeth) * Math.PI * 2;
+        gctx.beginPath();
+        gctx.moveTo(Math.cos(a) * SAW_R * 0.72, Math.sin(a) * SAW_R * 0.72);
+        gctx.lineTo(Math.cos(a2) * (SAW_R + 4), Math.sin(a2) * (SAW_R + 4));
+        gctx.lineTo(Math.cos(a + Math.PI * 2 / teeth) * SAW_R * 0.72,
+                    Math.sin(a + Math.PI * 2 / teeth) * SAW_R * 0.72);
+        gctx.fill();
+      }
+      // Body circle
+      gctx.beginPath();
+      gctx.arc(0, 0, SAW_R * 0.72, 0, Math.PI * 2);
+      gctx.fillStyle = '#fff';
+      gctx.fill();
+      // Inner dark circle
+      gctx.beginPath();
+      gctx.arc(0, 0, SAW_R * 0.38, 0, Math.PI * 2);
+      gctx.fillStyle = '#000';
+      gctx.fill();
+      // Center dot
+      gctx.beginPath();
+      gctx.arc(0, 0, 2, 0, Math.PI * 2);
+      gctx.fillStyle = '#fff';
+      gctx.fill();
+
+      gctx.restore();
+    }
+
+    // ── Spike Warnings ──
+    for (const w of spikeWarnings) {
+      if (!w.blinkOn) continue;
+      const wx = w.x, wy = 52;
+      const size = 22;
+      gctx.save();
+      gctx.translate(wx, wy);
+      // Triangle — black fill, white border
+      gctx.beginPath();
+      gctx.moveTo(0, -size);
+      gctx.lineTo(size * 0.9, size * 0.5);
+      gctx.lineTo(-size * 0.9, size * 0.5);
+      gctx.closePath();
+      gctx.fillStyle = '#000';
+      gctx.fill();
+      gctx.strokeStyle = '#fff';
+      gctx.lineWidth = 2;
+      gctx.stroke();
+      // "!" white inside
+      gctx.fillStyle = '#fff';
+      gctx.font = 'bold 16px monospace';
+      gctx.textAlign = 'center';
+      gctx.textBaseline = 'middle';
+      gctx.fillText('!', 0, 4);
+      gctx.restore();
+    }
+
+    // ── Spikes ──
+    for (const s of spikes) {
+      gctx.save();
+      gctx.translate(s.x, s.y);
+      gctx.rotate(Math.PI); // flip 180° so spike points down
+      gctx.fillStyle = '#fff';
+      // Center spike (tallest)
+      gctx.beginPath();
+      gctx.moveTo(0, 0);
+      gctx.lineTo(-SPIKE_W / 2, SPIKE_H);
+      gctx.lineTo(SPIKE_W / 2, SPIKE_H);
+      gctx.closePath();
+      gctx.fill();
+      // Left smaller spike
+      gctx.beginPath();
+      gctx.moveTo(-SPIKE_W * 0.55, 8);
+      gctx.lineTo(-SPIKE_W, SPIKE_H);
+      gctx.lineTo(-SPIKE_W * 0.1, SPIKE_H);
+      gctx.closePath();
+      gctx.fill();
+      // Right smaller spike
+      gctx.beginPath();
+      gctx.moveTo(SPIKE_W * 0.55, 8);
+      gctx.lineTo(SPIKE_W, SPIKE_H);
+      gctx.lineTo(SPIKE_W * 0.1, SPIKE_H);
+      gctx.closePath();
+      gctx.fill();
+      gctx.restore();
+    }
+
+    // Player — with squash/stretch
+    const px = player.x, py = player.y, pw = player.w, ph = player.h;
+    const cx = px + pw / 2, cy = py + ph; // anchor bottom-center
+    gctx.save();
+    gctx.translate(cx, cy);
+    gctx.scale(player.scaleX, player.scaleY);
+    gctx.translate(-pw / 2, -ph);
+    // shadow
+    gctx.fillStyle = 'rgba(255,255,255,0.12)';
+    gctx.fillRect(2, ph + 2, pw, 4);
+    // body
+    gctx.fillStyle = (devMode && devFlashTimer > 0) ? '#ff3333' : '#fff';
+    gctx.fillRect(0, 0, pw, ph);
+    gctx.restore();
+  }
+
+  // ── Loop ──
+  function loop() {
+    update();
+    drawFrame();
+    animId = requestAnimationFrame(loop);
+  }
+
+  function endGame() {
+    if (devMode) {
+      devFlashTimer = 0.5; // flash red for 0.5s
+      return;
+    }
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    statGames++;
+    statTotal += score;
+    if (score > statBest) statBest = score;
+    saveToFirebase();
+    clearTimeout(cursorHideTimer);
+    cursorCanvas.style.opacity = '1';
+    overlayTitle.textContent = 'GAME OVER';
+    overlayScore.textContent = 'HEIGHT: ' + score;
+    gameOverlay.classList.add('show');
+  }
+
+  function startGame() {
+    flash.classList.add('on');
+    setTimeout(() => {
+      homeScreen.classList.remove('active');
+      gameScreen.style.display = 'block';
+      flash.style.transition = 'opacity 0.35s';
+      flash.classList.remove('on');
+      settingsBtn.classList.remove('visible');
+      initGame();
+      loop();
+      hideCursorInGame();
+    }, 180);
+    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+  }
+
+  function restartGame() {
+    clearInterval(countdownInterval);
+    cancelAnimationFrame(animId);
+    gameOverlay.classList.remove('show');
+    pauseOverlay.classList.remove('show');
+    initGame();
+    loop();
+    hideCursorInGame();
+  }
+
+  function goHome() {
+    clearInterval(countdownInterval);
+    cancelAnimationFrame(animId);
+    gameRunning = false;
+    gamePaused = false;
+    countingDown = false;
+    devMode = false;
+    devFlying = false;
+    devLabel.style.display = 'none';
+    devConsole.classList.remove('show');
+    menuWarning.classList.remove('show');
+    clearTimeout(cursorHideTimer);
+    cursorCanvas.style.opacity = '1';
+    flash.classList.add('on');
+    setTimeout(() => {
+      gameScreen.style.display = 'none';
+      homeScreen.classList.add('active');
+      flash.style.transition = 'opacity 0.35s';
+      flash.classList.remove('on');
+      settingsBtn.classList.add('visible');
+      updateStatsUI();
+    }, 180);
+    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+  }
+</script>
+</body>
+</html>
