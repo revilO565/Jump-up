@@ -794,7 +794,7 @@
     reauthenticateWithCredential, EmailAuthProvider, deleteUser
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -811,9 +811,10 @@
   const db   = getFirestore(app);
 
   // Default shape of a user's saved data
-  function defaultUserData(playerName) {
+  function defaultUserData(playerName, email) {
     return {
       playerName: playerName,
+      email: email || '',
       stats: { best: 0, games: 0, total: 0 },
       settings: {
         showHeight: true,
@@ -822,27 +823,59 @@
         showCursor: false,
         showWarning: true
       },
-      rank: { points: 0 } // placeholder for future rank system
+      rank: { points: 0 }
     };
   }
 
   // ── Sign Up ──
+  // Helper: check if a player name is already taken
+  async function isNameTaken(playerName) {
+    const q = query(collection(db, "users"), where("playerName", "==", playerName));
+    const snap = await getDocs(q);
+    return !snap.empty;
+  }
+
   window.firebaseSignUp = async function (playerName, email, password) {
+    // Check name uniqueness first
+    if (await isNameTaken(playerName)) {
+      const err = new Error('Name already taken');
+      err.code = 'auth/name-already-taken';
+      throw err;
+    }
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const data = defaultUserData(playerName);
+    const data = defaultUserData(playerName, email);
     await setDoc(doc(db, "users", cred.user.uid), data);
     return { uid: cred.user.uid, data };
   };
 
-  // ── Login ──
-  window.firebaseLogin = async function (email, password) {
+  // ── Login (supports email OR player name) ──
+  window.firebaseLogin = async function (emailOrName, password) {
+    let email = emailOrName;
+    // If input doesn't look like an email, treat it as a player name
+    if (!emailOrName.includes('@')) {
+      const q = query(collection(db, "users"), where("playerName", "==", emailOrName));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        const err = new Error('User not found');
+        err.code = 'auth/user-not-found';
+        throw err;
+      }
+      // Get the email from the user document
+      const userData = snap.docs[0].data();
+      if (!userData.email) {
+        // Store email during signup so we can look it up by name
+        const err = new Error('User not found');
+        err.code = 'auth/user-not-found';
+        throw err;
+      }
+      email = userData.email;
+    }
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const snap = await getDoc(doc(db, "users", cred.user.uid));
     let data;
     if (snap.exists()) {
       data = snap.data();
     } else {
-      // Fallback: create a default doc if missing
       data = defaultUserData(cred.user.email.split('@')[0]);
       await setDoc(doc(db, "users", cred.user.uid), data);
     }
@@ -889,15 +922,17 @@
   };
 
   // Translate Firebase error codes to friendly messages
-  window.firebaseErrorMessage = function (err) {
+  window.firebaseErrorMessage = function (err, context) {
     const code = err && err.code ? err.code : '';
     switch (code) {
+      case 'auth/name-already-taken': return 'This name is already taken.';
       case 'auth/email-already-in-use': return 'This email is already registered.';
       case 'auth/invalid-email': return 'Please enter a valid email address.';
       case 'auth/weak-password': return 'Password must be at least 6 characters.';
       case 'auth/user-not-found':
       case 'auth/wrong-password':
-      case 'auth/invalid-credential': return 'Incorrect email or password.';
+      case 'auth/invalid-credential':
+        return context === 'delete' ? 'Incorrect password.' : 'Incorrect email/name or password.';
       case 'auth/too-many-requests': return 'Too many attempts. Please try again later.';
       case 'auth/no-current-user': return 'You are not logged in.';
       default: return 'Something went wrong. Please try again.';
@@ -1368,6 +1403,10 @@
           statGames = g.stats?.games ?? 0;
           statTotal = g.stats?.total ?? 0;
           skipAuthOnStart = true;
+          // Update stat display elements immediately
+          if (elBest)  elBest.textContent  = statBest;
+          if (elGames) elGames.textContent = statGames;
+          if (elAvg)   elAvg.textContent   = statGames ? Math.round(statTotal / statGames) : 0;
         } catch(e) {}
       }
     }
@@ -1516,12 +1555,12 @@
 
   async function submitLogin() {
     clearAuthErrors('login');
-    const email = document.getElementById('login-email').value.trim();
-    const pass  = document.getElementById('login-password').value;
+    const emailOrName = document.getElementById('login-email').value.trim();
+    const pass        = document.getElementById('login-password').value;
     let hasError = false;
 
-    if (!email) {
-      setFieldError('login-email-field', 'login-email-error', 'Please enter your email or username.');
+    if (!emailOrName) {
+      setFieldError('login-email-field', 'login-email-error', 'Please enter your email or name.');
       hasError = true;
     }
     if (!pass) {
@@ -1533,7 +1572,7 @@
     const btn = document.querySelector('#auth-panel-login .auth-submit');
     btn.disabled = true;
     try {
-      const { uid, data } = await window.firebaseLogin(email, pass);
+      const { uid, data } = await window.firebaseLogin(emailOrName, pass);
       currentUid = uid;
       isGuest = false;
       applyLoadedData(data);
@@ -1609,7 +1648,9 @@
       goToHomeFromAuth();
     } catch (err) {
       const msg = window.firebaseErrorMessage(err);
-      if (err && err.code === 'auth/email-already-in-use') {
+      if (err && err.code === 'auth/name-already-taken') {
+        setFieldError('signup-name-field', 'signup-name-error', msg);
+      } else if (err && err.code === 'auth/email-already-in-use') {
         setFieldError('signup-email-field', 'signup-email-error', msg);
       } else if (err && err.code === 'auth/weak-password') {
         setFieldError('signup-password-field', 'signup-password-error', msg);
@@ -1787,7 +1828,7 @@
       closeDeleteDialog();
       performLogout();
     } catch (err) {
-      setFieldError('delete-password-field', 'delete-password-error', window.firebaseErrorMessage(err));
+      setFieldError('delete-password-field', 'delete-password-error', window.firebaseErrorMessage(err, 'delete'));
     }
   }
   document.getElementById('delete-password').addEventListener('keydown', e => {
