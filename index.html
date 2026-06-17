@@ -3049,21 +3049,27 @@
   }
 
   // ── Zoom / Cheat Detection ──
+  // Capture devicePixelRatio at page load BEFORE any user interaction.
+  // If they zoom before loading the page, we compare against a hardcoded
+  // "expected" ratio of 1 (standard displays) or 2 (HiDPI/Retina).
+  // We snap to the nearest standard: 1, 1.25, 1.5, 1.75, 2, 2.5, 3
   const cheatMsg = document.getElementById('cheat-msg');
   let zoomCheckInterval = null;
 
-  function getZoomLevel() {
-    return Math.round(window.devicePixelRatio * 100);
+  function snapToStandard(dpr) {
+    const standards = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+    return standards.reduce((a, b) => Math.abs(b - dpr) < Math.abs(a - dpr) ? b : a);
+  }
+  const NATIVE_DPR = snapToStandard(window.devicePixelRatio);
+
+  function isZoomed() {
+    return Math.abs(window.devicePixelRatio - NATIVE_DPR) > 0.1;
   }
 
   function startZoomCheck() {
-    const baseZoom = getZoomLevel();
     zoomCheckInterval = setInterval(() => {
       if (!gameRunning || gamePaused) return;
-      const current = getZoomLevel();
-      if (current !== baseZoom) {
-        cheatKill();
-      }
+      if (isZoomed()) cheatKill();
     }, 1000);
   }
 
@@ -3106,6 +3112,23 @@
   }
 
   function startGame() {
+    if (isZoomed()) {
+      // Already cheating before game started
+      cheatMsg.style.display = 'block';
+      flash.classList.add('on');
+      setTimeout(() => {
+        homeScreen.classList.remove('active');
+        gameScreen.style.display = 'block';
+        flash.style.transition = 'opacity 0.35s';
+        flash.classList.remove('on');
+        settingsBtn.classList.remove('visible');
+        overlayTitle.textContent = 'GAME OVER';
+        overlayScore.textContent = 'HEIGHT: 0';
+        gameOverlay.classList.add('show');
+      }, 180);
+      setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+      return;
+    }
     flash.classList.add('on');
     setTimeout(() => {
       homeScreen.classList.remove('active');
