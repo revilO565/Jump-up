@@ -1105,6 +1105,7 @@
     <div class="over-score" id="overlay-score">HEIGHT: 0</div>
     <button class="pixel-btn big has-hint" id="overlay-primary-btn" onclick="restartGame()"><span>Retry</span><span class="key-hint">Space</span></button>
     <button class="pixel-btn" onclick="goHome()"><span>Menu</span></button>
+    <div id="cheat-msg" style="display:none;color:#f44;font-family:'Press Start 2P',monospace;font-size:clamp(6px,1vw,8px);letter-spacing:1px;text-align:center;margin-top:8px;line-height:1.8;max-width:320px;">Awww, did you think you could cheat?<br>Set the size back to 100%.</div>
   </div>
   <div id="pause-overlay">
     <div class="over-title" id="pause-title">Paused</div>
@@ -3047,11 +3048,49 @@
     animId = requestAnimationFrame(loop);
   }
 
+  // ── Zoom / Cheat Detection ──
+  const cheatMsg = document.getElementById('cheat-msg');
+  let zoomCheckInterval = null;
+
+  function getZoomLevel() {
+    return Math.round(window.devicePixelRatio * 100);
+  }
+
+  function startZoomCheck() {
+    const baseZoom = getZoomLevel();
+    zoomCheckInterval = setInterval(() => {
+      if (!gameRunning || gamePaused) return;
+      const current = getZoomLevel();
+      if (current !== baseZoom) {
+        cheatKill();
+      }
+    }, 1000);
+  }
+
+  function stopZoomCheck() {
+    clearInterval(zoomCheckInterval);
+    zoomCheckInterval = null;
+  }
+
+  function cheatKill() {
+    if (!gameRunning || devMode) return;
+    stopZoomCheck();
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    clearTimeout(cursorHideTimer);
+    cursorCanvas.style.opacity = '1';
+    overlayTitle.textContent = 'GAME OVER';
+    overlayScore.textContent = 'HEIGHT: ' + score;
+    cheatMsg.style.display = 'block';
+    gameOverlay.classList.add('show');
+  }
+
   function endGame() {
     if (devMode) {
-      devFlashTimer = 0.5; // flash red for 0.5s
+      devFlashTimer = 0.5;
       return;
     }
+    stopZoomCheck();
     gameRunning = false;
     cancelAnimationFrame(animId);
     statGames++;
@@ -3060,6 +3099,7 @@
     saveToFirebase();
     clearTimeout(cursorHideTimer);
     cursorCanvas.style.opacity = '1';
+    cheatMsg.style.display = 'none';
     overlayTitle.textContent = 'GAME OVER';
     overlayScore.textContent = 'HEIGHT: ' + score;
     gameOverlay.classList.add('show');
@@ -3076,6 +3116,7 @@
       initGame();
       loop();
       hideCursorInGame();
+      startZoomCheck();
     }, 180);
     setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
   }
@@ -3083,16 +3124,20 @@
   function restartGame() {
     clearInterval(countdownInterval);
     cancelAnimationFrame(animId);
+    stopZoomCheck();
     gameOverlay.classList.remove('show');
     pauseOverlay.classList.remove('show');
+    cheatMsg.style.display = 'none';
     initGame();
     loop();
     hideCursorInGame();
+    startZoomCheck();
   }
 
   function goHome() {
     clearInterval(countdownInterval);
     cancelAnimationFrame(animId);
+    stopZoomCheck();
     gameRunning = false;
     gamePaused = false;
     countingDown = false;
