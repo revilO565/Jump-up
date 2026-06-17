@@ -216,15 +216,36 @@
 
   .guest-transfer-notice {
     font-family: var(--pixel);
-    font-size: clamp(6px, 1vw, 7px);
+    font-size: clamp(7px, 1.2vw, 9px);
     letter-spacing: 1px;
     color: #8f8;
     text-align: center;
     line-height: 1.8;
     border: 2px solid #8f8;
-    padding: 10px 14px;
+    padding: 12px 16px;
     width: 100%;
     box-sizing: border-box;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .guest-transfer-notice.declined {
+    color: #f66;
+    border-color: #f66;
+  }
+  .guest-transfer-notice-text {
+    margin-bottom: 10px;
+  }
+  .guest-transfer-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .guest-transfer-toggle-label {
+    font-family: var(--pixel);
+    font-size: clamp(6px, 1vw, 8px);
+    letter-spacing: 1px;
+    color: inherit;
   }
 
   /* ── Pixel Input ── */
@@ -1490,6 +1511,7 @@
     elGames.textContent = '0';
     elAvg.textContent = '0';
     skipAuthOnStart = false;
+    guestTransferDeclined = false;
 
     settingsBtn.classList.remove('visible');
     closeSettings();
@@ -1638,7 +1660,7 @@
       currentUid = uid;
       isGuest = false;
 
-      if (wasGuest && (guestStats.games > 0 || guestStats.best > 0)) {
+      if (wasGuest && !guestTransferDeclined && (guestStats.games > 0 || guestStats.best > 0)) {
         // Transfer guest progress into the new account
         data.stats = guestStats;
         data.settings = guestSettings;
@@ -1861,14 +1883,58 @@
     if (isGuest && tab === 'signup') showGuestTransferNotice();
   }
 
+  let guestTransferDeclined = false;
+
   function showGuestTransferNotice() {
     const panel = document.getElementById('auth-panel-signup');
-    if (!panel.querySelector('.guest-transfer-notice')) {
-      const note = document.createElement('div');
-      note.className = 'guest-transfer-notice';
-      note.textContent = 'Your guest progress will be saved to this account.';
-      panel.insertBefore(note, panel.firstChild);
-    }
+    // Remove any existing notice first
+    const old = panel.querySelector('.guest-transfer-notice');
+    if (old) old.remove();
+
+    const notice = document.createElement('div');
+    notice.className = 'guest-transfer-notice';
+
+    const textEl = document.createElement('div');
+    textEl.className = 'guest-transfer-notice-text';
+    textEl.textContent = guestTransferDeclined
+      ? 'Your guest progress will NOT be saved to this account.'
+      : 'Your guest progress will be saved to this account.';
+    notice.appendChild(textEl);
+
+    const row = document.createElement('div');
+    row.className = 'guest-transfer-toggle-row';
+
+    const label = document.createElement('label');
+    label.className = 'toggle-switch';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = guestTransferDeclined;
+    const slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    label.appendChild(checkbox);
+    label.appendChild(slider);
+
+    const toggleLabel = document.createElement('span');
+    toggleLabel.className = 'guest-transfer-toggle-label';
+    toggleLabel.textContent = 'Rather not?';
+
+    checkbox.addEventListener('change', () => {
+      guestTransferDeclined = checkbox.checked;
+      if (guestTransferDeclined) {
+        notice.classList.add('declined');
+        textEl.textContent = 'Your guest progress will NOT be saved to this account.';
+      } else {
+        notice.classList.remove('declined');
+        textEl.textContent = 'Your guest progress will be saved to this account.';
+      }
+    });
+
+    row.appendChild(label);
+    row.appendChild(toggleLabel);
+    notice.appendChild(row);
+
+    if (guestTransferDeclined) notice.classList.add('declined');
+    panel.insertBefore(notice, panel.firstChild);
   }
 
   // ── Stats ──
