@@ -2420,10 +2420,10 @@
                  shaking: false, shakeTimer: 0, broken: false, moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0 });
     // Generate platforms above current camera position
     let py = (H - 120) - camY;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 200; i++) {
       const pw = 60 + Math.random() * 80;
       const px = Math.random() * (W - pw - 20) + 10;
-      const gap = 70 + Math.random() * 60 + Math.min(i, 60) * 0.5;
+      const gap = 50 + Math.random() * 40 + Math.min(i, 80) * 0.4;
       const platScore = Math.round(-(py + camY) / 10);
       const canUnstable = platScore >= 200;
       const canMoving   = platScore >= 400;
