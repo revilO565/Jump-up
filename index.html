@@ -2663,6 +2663,8 @@
   const GRAVITY     = 0.45;
   const JUMP_FORCE  = -11;
   const MOVE_SPEED  = 4;
+  const DASH_SPEED  = 18;   // velocity applied on dash
+  const DASH_DURATION = 0.12; // seconds dash lasts
   const SAW_R       = 12;  // saw radius
   const SAW_MIN_PLAT = SAW_R * 2 + 20; // minimum platform width for a saw to spawn
   const P_W_NORMAL  = 22;  // player width normal
@@ -2780,8 +2782,11 @@
       ducking: false,
       jumpsLeft: 1,
       _upHeld: false,
-      scaleX: 1, scaleY: 1,   // squash & stretch
+      scaleX: 1, scaleY: 1,
       _prevOnGround: false,
+      dashReady: true,   // can dash again once ground is touched
+      dashTimer: 0,      // counts down while dashing
+      dashDir: 0,        // -1 left, 1 right
       maxY: H - 20 - P_H_NORMAL, // highest world-Y reached (lowest number = highest)
     };
 
@@ -2832,6 +2837,23 @@
       e.preventDefault();
       toggleDevConsole();
     }
+    // Shift = Dash
+    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && gameRunning && !gamePaused && !devConsoleOpen) {
+      e.preventDefault();
+      if (player && player.dashReady && player.dashTimer <= 0) {
+        const left  = keys['KeyA'] || keys['ArrowLeft'];
+        const right = keys['KeyD'] || keys['ArrowRight'];
+        const dir = right ? 1 : left ? -1 : 0;
+        if (dir !== 0) {
+          player.dashDir   = dir;
+          player.dashTimer = DASH_DURATION;
+          player.dashReady = false;
+          // Squish horizontally on dash
+          player.scaleX = dir === 1 ? 1.4 : 0.7;
+          player.scaleY = 0.7;
+        }
+      }
+    }
     // Dev code detection: digit keys
     if (e.code.startsWith('Digit') && gameRunning && !devConsoleOpen) {
       handleDevKey(e.key);
@@ -2876,11 +2898,20 @@
       }
     }
 
-    // Horizontal — slower while ducking, faster while running
+    // ── Dash ──
+    if (player.dashTimer > 0) {
+      player.dashTimer -= 1 / 60;
+      player.vx = player.dashDir * DASH_SPEED;
+    }
+    if (player.onGround) player.dashReady = true;
+
+    // Horizontal — slower while ducking
     const speed = player.ducking ? MOVE_SPEED * 0.5 : MOVE_SPEED;
-    if (left)       player.vx = -speed;
-    else if (right) player.vx = speed;
-    else            player.vx *= 0.75;
+    if (player.dashTimer <= 0) {
+      if (left)       player.vx = -speed;
+      else if (right) player.vx = speed;
+      else            player.vx *= 0.75;
+    }
 
     // Jump — double jump allowed
     if (up && !player._upHeld) {
