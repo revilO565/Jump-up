@@ -5,6 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jump Up</title>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<script>
+// Profanity filter — comprehensive multi-language word list
+(function() {
+  // Core profanity list covering EN, DE, FR, ES, IT, NL, PT and more
+  const WORDS = [
+    // English
+    'fuck','shit','ass','bitch','cunt','dick','pussy','cock','nigger','nigga','faggot','fag',
+    'whore','slut','bastard','damn','hell','piss','twat','wank','asshole','arsehole','motherfucker',
+    'bullshit','crap','dumbass','jackass','dipshit','prick','shithead','fucker','fucking','fucked',
+    'retard','retarded','spastic','tranny','chink','gook','kike','spic','wetback','dyke',
+    // German
+    'scheiße','scheisse','scheiß','arsch','arschloch','wichser','fotze','hurensohn','ficken',
+    'fick','verpiss','idiot','vollidiot','dummkopf','hure','nutte','drecksau','miststück',
+    'blödmann','depp','trottel','pisser','schwanz','kacke','kacker','beschissen','gehirnamputiert',
+    'spast','spastisch','behindert','autist','neger','kanake','jude','türke',
+    // French
+    'merde','putain','connard','connasse','salope','encule','baiser','bite','chatte','foutre',
+    'bordel','pute','fils de pute','cul','niquer','enculé','nique','con','conne',
+    // Spanish
+    'mierda','puta','coño','joder','maricón','hostia','gilipollas','cabrón','follar','polla',
+    'culo','pendejo','chinga','chingada','culero','mamada','pinche','verga',
+    // Italian
+    'cazzo','vaffanculo','stronzo','minchia','puttana','figlio di puttana','merda','troia',
+    // Dutch
+    'kut','godverdomme','klootzak','lul','hoer','kanker','tering','eikel','neuken',
+    // Portuguese
+    'porra','caralho','buceta','foda','fodasse','merda','puta','viado','safado',
+    // General
+    'sex','porn','nude','naked','xxx',
+  ];
+
+  const _list = WORDS.map(w => w.toLowerCase());
+
+  window.profanityCheck = function(text) {
+    if (!text) return false;
+    const lower = text.toLowerCase().replace(/[^a-z0-9äöüßàâéèêëïîôùûç]/g, ' ');
+    return _list.some(w => {
+      // Check whole word or contained
+      const re = new RegExp('(?:^|\\s|[^a-z])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|\\s|[^a-z])', 'i');
+      return re.test(' ' + lower + ' ');
+    });
+  };
+})();
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1962,6 +2006,9 @@
     if (!name) {
       setFieldError('signup-name-field', 'signup-name-error', 'Please enter a player name.');
       hasError = true;
+    } else if (window.profanityCheck(name)) {
+      setFieldError('signup-name-field', 'signup-name-error', 'Please choose a different name.');
+      hasError = true;
     }
     if (!email) {
       setFieldError('signup-email-field', 'signup-email-error', 'Please enter your email.');
@@ -2297,6 +2344,10 @@
     const newName = input.value.trim();
     if (!newName) {
       setFieldError('rename-field', 'rename-error', 'Please enter a name.');
+      return;
+    }
+    if (window.profanityCheck(newName)) {
+      setFieldError('rename-field', 'rename-error', 'Please choose a different name.');
       return;
     }
     try {
