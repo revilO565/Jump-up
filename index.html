@@ -1025,16 +1025,45 @@
 
   /* ── Home Tabs ── */
   #home-tabs {
-    margin-bottom: 28px;
-    animation: slideDown 0.4s cubic-bezier(.17,.67,.35,1.3) both;
-  }
-  #home-panel-classic {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    animation: panelIn 0.25s ease both;
+    gap: 16px;
+    margin-bottom: 32px;
+    animation: btnPop 0.5s cubic-bezier(.17,.67,.35,1.4) both;
   }
+  .home-tab-btn {
+    font-family: var(--pixel);
+    font-size: clamp(10px, 1.8vw, 14px);
+    padding: 16px 40px;
+    letter-spacing: 3px;
+    background: #000;
+    color: #fff;
+    border: 3px solid #fff;
+    cursor: none !important;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.06s, color 0.06s, transform 0.06s;
+    opacity: 0.45;
+  }
+  .home-tab-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.15s;
+  }
+  .home-tab-btn:hover { opacity: 1; }
+  .home-tab-btn:hover::before { transform: scaleX(1); }
+  .home-tab-btn:hover span { position: relative; z-index: 1; color: #000; }
+  .home-tab-btn:active { transform: translate(2px, 2px); }
+  .home-tab-btn.active {
+    opacity: 1;
+    background: #fff;
+    color: #000;
+  }
+  .home-tab-btn.active span { position: relative; z-index: 1; color: #000; }
+  .home-tab-btn span { position: relative; z-index: 1; }
   .level-card {
     display: flex;
     align-items: center;
@@ -1684,10 +1713,9 @@
 
   <div id="player-name-tag"></div>
 
-  <!-- Home tabs -->
-  <div class="mode-tabs" id="home-tabs">
-    <button class="tab-btn active" id="home-tab-classic" onclick="switchHomeTab('classic')"><span>Classic</span></button>
-    <button class="tab-btn" id="home-tab-level" onclick="switchHomeTab('level')"><span>Level</span></button>
+  <div id="home-tabs">
+    <button class="home-tab-btn active" id="home-tab-classic" onclick="switchHomeTab('classic')"><span>Classic</span></button>
+    <button class="home-tab-btn" id="home-tab-level" onclick="switchHomeTab('level')"><span>Level</span></button>
   </div>
 
   <!-- Classic panel -->
@@ -1812,6 +1840,7 @@
         el.closest('.autocomplete-item') ||
         el.closest('.auth-tab-btn') || el.closest('.auth-forgot') ||
         el.closest('#leaderboard-btn') || el.closest('#leaderboard-close') ||
+        el.closest('.home-tab-btn') ||
         getComputedStyle(el).cursor === 'pointer') return 'pointer';
     return 'normal';
   }
@@ -2297,7 +2326,6 @@
       if (!levelsLoaded) loadLevels();
     }
   }
-
   async function loadLevels() {
     levelLoading.style.display = 'block';
     levelLoading.textContent = 'Loading levels...';
@@ -2342,9 +2370,161 @@
     }
   }
 
+  // ── Level Mode ──
+  let levelMode = false;
+  let levelFlags = [];    // flag objects for win detection
+  let currentLvl = null;
+
+  function buildLevelPlatforms(lvl) {
+    const objs = lvl.objects || [];
+    const plats = [];
+    const sawList = [];
+    const flags = [];
+
+    // Ground
+    plats.push({ x: 0, y: H - 20, w: W, h: 20, unstable: false, moving: false,
+                 shaking: false, shakeTimer: 0, broken: false,
+                 moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0 });
+
+    for (const o of objs) {
+      if (o.type === 'flag') {
+        flags.push({ x: o.x, y: o.y, w: o.w || 22, h: o.h || 40 });
+        continue;
+      }
+      const p = {
+        x: o.x, y: o.y, w: o.w, h: o.h || 12,
+        unstable: o.type === 'unstable',
+        moving:   o.type === 'moving',
+        moveOrigin: o.x,
+        moveRange: o.moveRange || 0,
+        moveDir: 1,
+        moveSpeed: o.moveSpeed || 0.8,
+        shaking: false, shakeTimer: 0, broken: false,
+      };
+      plats.push(p);
+      if (o.type === 'saw') {
+        sawList.push({
+          platX: o.x, platW: o.w, platY: o.y,
+          x: o.x + SAW_R, dir: 1,
+          speed: o.sawSpeed || 0.6,
+        });
+      }
+    }
+    return { plats, sawList, flags };
+  }
+
   function startLevel(lvl) {
-    // Full level gameplay will be added once the editor is ready
-    alert('Level "' + (lvl.name || 'Unnamed') + '" — coming soon!');
+    if (isZoomed()) {
+      cheatMsg.style.display = 'block';
+      flash.classList.add('on');
+      setTimeout(() => {
+        homeScreen.classList.remove('active');
+        gameScreen.style.display = 'block';
+        flash.style.transition = 'opacity 0.35s';
+        flash.classList.remove('on');
+        settingsBtn.classList.remove('visible');
+        leaderboardBtn.classList.remove('visible');
+        overlayTitle.textContent = 'GAME OVER';
+        overlayScore.textContent = 'HEIGHT: 0';
+        gameOverlay.classList.add('show');
+      }, 180);
+      setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+      return;
+    }
+
+    currentLvl = lvl;
+    levelMode = true;
+
+    flash.classList.add('on');
+    setTimeout(() => {
+      homeScreen.classList.remove('active');
+      gameScreen.style.display = 'block';
+      flash.style.transition = 'opacity 0.35s';
+      flash.classList.remove('on');
+      settingsBtn.classList.remove('visible');
+      leaderboardBtn.classList.remove('visible');
+
+      // Init game engine with level objects
+      resizeCanvas();
+      keys = {};
+      score = 0;
+      cameraY = 0;
+      sawAngle = 0;
+      particles = [];
+      spikes = [];
+      spikeWarnings = [];
+      spikeTimer = 0;
+      nextSpikeInterval = 9999; // no spikes in level mode
+      resetEaster();
+
+      const { plats, sawList, flags } = buildLevelPlatforms(lvl);
+      platforms = plats;
+      saws = sawList;
+      levelFlags = flags;
+
+      // Place player near first platform above ground
+      let startY = H - 20 - P_H_NORMAL;
+      const sorted = lvl.objects.filter(o => o.type !== 'flag').sort((a,b) => b.y - a.y);
+      if (sorted.length) {
+        const lowest = sorted[0];
+        startY = lowest.y - P_H_NORMAL - 2;
+      }
+
+      player = {
+        x: W / 2 - P_W_NORMAL / 2,
+        y: startY,
+        vx: 0, vy: 0,
+        w: P_W_NORMAL, h: P_H_NORMAL,
+        onGround: false, ducking: false,
+        jumpsLeft: 1, _upHeld: false,
+        scaleX: 1, scaleY: 1, _prevOnGround: false,
+        dashReady: true, dashTimer: 0, dashDir: 0,
+        maxY: startY,
+      };
+
+      gameRunning = true;
+      gamePaused = false;
+      countingDown = false;
+      devFlying = false;
+      devConsoleOpen = false;
+      devConsole.classList.remove('show');
+      devCmdError.style.display = 'none';
+      gameOverlay.classList.remove('show');
+      pauseOverlay.classList.remove('show');
+      cheatMsg.style.display = 'none';
+
+      loop();
+      hideCursorInGame();
+      startZoomCheck();
+      setTimeout(() => { if (gameRunning && !gamePaused) showControls(); }, 3000);
+      resetControlsIdleTimer();
+    }, 180);
+    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+  }
+
+  function checkLevelWin() {
+    if (!levelMode || !levelFlags.length) return;
+    for (const f of levelFlags) {
+      const fsy = f.y + cameraY;
+      if (player.x + player.w > f.x && player.x < f.x + f.w &&
+          player.y + player.h > fsy && player.y < fsy + f.h) {
+        levelWin();
+        return;
+      }
+    }
+  }
+
+  function levelWin() {
+    if (!gameRunning) return;
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    stopZoomCheck();
+    clearTimeout(cursorHideTimer);
+    cursorCanvas.style.opacity = '1';
+    overlayTitle.textContent = 'LEVEL COMPLETE!';
+    overlayScore.textContent = 'HEIGHT: ' + score;
+    gameOverlay.classList.add('show');
+    cheatMsg.style.display = 'none';
   }
 
   // ── Leaderboard ──
@@ -3542,6 +3722,9 @@
       endGame();
     }
 
+    // Level win check
+    checkLevelWin();
+
     // ── Easter Egg: track horizontal movement at ground level ──
     if (gameRunning && score <= 5 && player.onGround) {
       const movingLeft  = isDown(['KeyA', 'ArrowLeft']);
@@ -3578,7 +3761,7 @@
     gctx.fillRect(0, 0, W, H);
 
     // ── Best Height Line ──
-    if (statBest > 0 && setShowBest.checked) {
+    if (!levelMode && statBest > 0 && setShowBest.checked) {
       // Convert statBest score to screen Y: score = cameraY/10, so worldY = -statBest*10, screenY = worldY + cameraY
       const bestScreenY = (-statBest * 10) + cameraY;
       if (bestScreenY > 0 && bestScreenY < H) {
@@ -3763,6 +3946,24 @@
       gctx.restore();
     }
 
+    // ── Level Flags ──
+    if (levelMode) {
+      for (const f of levelFlags) {
+        const fsy = f.y + cameraY;
+        if (fsy > H + 60 || fsy < -100) continue;
+        const poleW = Math.max(1, f.h * 0.075);
+        const poleX = f.x + f.w * 0.18;
+        gctx.fillStyle = '#fff';
+        gctx.fillRect(poleX, fsy, poleW, f.h);
+        gctx.beginPath();
+        gctx.moveTo(poleX + poleW, fsy + f.h * 0.05);
+        gctx.lineTo(poleX + poleW + f.w * 0.75, fsy + f.h * 0.225);
+        gctx.lineTo(poleX + poleW, fsy + f.h * 0.4);
+        gctx.closePath();
+        gctx.fill();
+      }
+    }
+
     // Player — with squash/stretch
     const px = player.x, py = player.y, pw = player.w, ph = player.h;
     const cx = px + pw / 2, cy = py + ph; // anchor bottom-center
@@ -3856,14 +4057,16 @@
     stopZoomCheck();
     gameRunning = false;
     cancelAnimationFrame(animId);
-    statGames++;
-    statTotal += score;
-    if (score > statBest) statBest = score;
-    saveToFirebase();
+    if (!levelMode) {
+      statGames++;
+      statTotal += score;
+      if (score > statBest) statBest = score;
+      saveToFirebase();
+    }
     clearTimeout(cursorHideTimer);
     cursorCanvas.style.opacity = '1';
     cheatMsg.style.display = 'none';
-    overlayTitle.textContent = 'GAME OVER';
+    overlayTitle.textContent = levelMode ? 'LEVEL FAILED' : 'GAME OVER';
     overlayScore.textContent = 'HEIGHT: ' + score;
     gameOverlay.classList.add('show');
   }
@@ -3912,12 +4115,16 @@
     gameOverlay.classList.remove('show');
     pauseOverlay.classList.remove('show');
     cheatMsg.style.display = 'none';
-    initGame();
-    loop();
-    hideCursorInGame();
-    startZoomCheck();
-    setTimeout(() => { if (gameRunning && !gamePaused) showControls(); }, 3000);
-    resetControlsIdleTimer();
+    if (levelMode && currentLvl) {
+      startLevel(currentLvl);
+    } else {
+      initGame();
+      loop();
+      hideCursorInGame();
+      startZoomCheck();
+      setTimeout(() => { if (gameRunning && !gamePaused) showControls(); }, 3000);
+      resetControlsIdleTimer();
+    }
   }
 
   function goHome() {
@@ -3931,6 +4138,9 @@
     countingDown = false;
     devMode = false;
     devFlying = false;
+    levelMode = false;
+    levelFlags = [];
+    currentLvl = null;
     devLabel.style.display = 'none';
     devConsole.classList.remove('show');
     menuWarning.classList.remove('show');
