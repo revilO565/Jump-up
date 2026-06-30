@@ -188,7 +188,7 @@
   #home-screen {
     gap: 0;
     justify-content: flex-start;
-    padding-top: 18vh;
+    padding-top: 26vh;
   }
 
   #home-panel-classic {
@@ -1608,7 +1608,8 @@
   <div id="game-overlay">
     <div class="over-title" id="overlay-title">GAME OVER</div>
     <div class="over-score" id="overlay-score">HEIGHT: 0</div>
-    <button class="pixel-btn big has-hint" id="overlay-primary-btn" onclick="restartGame()"><span>Retry</span><span class="key-hint">Space</span></button>
+    <div id="all-levels-msg" style="display:none;font-family:'Press Start 2P',monospace;font-size:clamp(6px,1vw,8px);letter-spacing:1px;text-align:center;line-height:1.8;max-width:320px;color:#aaa;margin-bottom:6px;">That's all the levels. But don't worry, more are coming! :)</div>
+    <button class="pixel-btn big has-hint" id="overlay-primary-btn" onclick="restartGame()"><span id="overlay-primary-label">Retry</span><span class="key-hint">Space</span></button>
     <button class="pixel-btn" onclick="goHome()"><span>Menu</span></button>
     <div id="cheat-msg" style="display:none;color:#f44;font-family:'Press Start 2P',monospace;font-size:clamp(6px,1vw,8px);letter-spacing:1px;text-align:center;margin-top:8px;line-height:1.8;max-width:320px;">Awww, did you think you could cheat?<br>Set the size back to 100%.</div>
   </div>
@@ -2330,6 +2331,7 @@
   const levelList        = document.getElementById('level-list');
   const levelEmpty       = document.getElementById('level-empty');
   let levelsLoaded = false;
+  let allLevels = []; // module-level cache for "Next level" lookup
 
   function switchHomeTab(tab) {
     document.getElementById('home-tab-classic').classList.toggle('active', tab === 'classic');
@@ -2351,6 +2353,7 @@
     if (!navigator.onLine) { levelLoading.textContent = 'No wifi.'; return; }
     try {
       const levels = await window.firebaseGetLevels();
+      allLevels = levels;
       levelsLoaded = true;
       levelLoading.style.display = 'none';
       if (!levels.length) {
@@ -2425,15 +2428,14 @@
     // Ground
     plats.push({ x: 0, y: H - 20, w: W, h: 20, unstable: false, moving: false,
                  shaking: false, shakeTimer: 0, broken: false,
-                 moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0 });
+                 moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0, _origId: null });
 
+    // First pass: build platforms, remembering original id -> platform reference
+    const idToPlat = {};
     for (const o of objs) {
+      if (o.type === 'flag') continue;
       const ox = o.x + xOffset;
       const oy = o.y + yOffset;
-      if (o.type === 'flag') {
-        flags.push({ x: ox, y: oy, w: o.w || 22, h: o.h || 40 });
-        continue;
-      }
       const p = {
         x: ox, y: oy, w: o.w, h: o.h || 12,
         unstable: o.type === 'unstable',
@@ -2443,8 +2445,10 @@
         moveDir: 1,
         moveSpeed: o.moveSpeed || 0.8,
         shaking: false, shakeTimer: 0, broken: false,
+        _origId: o.id,
       };
       plats.push(p);
+      idToPlat[o.id] = p;
       if (o.type === 'saw') {
         sawList.push({
           platX: ox, platW: o.w, platY: oy,
@@ -2452,6 +2456,21 @@
           speed: o.sawSpeed || 0.6,
         });
       }
+    }
+
+    // Second pass: flags — if resting on a platform, store a reference + relative offset
+    // so the flag can follow that platform's movement each frame (e.g. moving platforms).
+    for (const o of objs) {
+      if (o.type !== 'flag') continue;
+      const ox = o.x + xOffset;
+      const oy = o.y + yOffset;
+      const flag = { x: ox, y: oy, w: o.w || 22, h: o.h || 40 };
+      if (o.restingOn != null && idToPlat[o.restingOn]) {
+        const plat = idToPlat[o.restingOn];
+        flag.restPlat = plat;
+        flag.relX = ox - plat.x; // offset from platform's current x, preserved as it moves
+      }
+      flags.push(flag);
     }
     return { plats, sawList, flags };
   }
@@ -2505,15 +2524,9 @@
       saws = sawList;
       levelFlags = flags;
 
-      // Place player just above the lowest non-ground platform (already coordinate-normalized)
-      let startY = H - 20 - P_H_NORMAL;
-      let startX = W / 2 - P_W_NORMAL / 2;
-      const nonGroundPlats = plats.filter(p => p.w < W); // exclude the ground platform itself
-      if (nonGroundPlats.length) {
-        const lowest = nonGroundPlats.reduce((a, b) => (a.y > b.y ? a : b));
-        startY = lowest.y - P_H_NORMAL - 2;
-        startX = lowest.x + lowest.w / 2 - P_W_NORMAL / 2;
-      }
+      // Player always starts bottom-center, standing on the ground — same as classic mode
+      const startY = H - 20 - P_H_NORMAL;
+      const startX = W / 2 - P_W_NORMAL / 2;
 
       player = {
         x: startX,
@@ -2530,9 +2543,11 @@
       gameRunning = true;
       gamePaused = false;
       countingDown = false;
+      devMode = false;
       devFlying = false;
       devConsoleOpen = false;
       devConsole.classList.remove('show');
+      devLabel.style.display = 'none';
       devCmdError.style.display = 'none';
       gameOverlay.classList.remove('show');
       pauseOverlay.classList.remove('show');
@@ -2568,8 +2583,27 @@
     cursorCanvas.style.opacity = '1';
     overlayTitle.textContent = 'LEVEL COMPLETE!';
     overlayScore.textContent = 'HEIGHT: ' + score;
-    gameOverlay.classList.add('show');
     cheatMsg.style.display = 'none';
+
+    const primaryBtn   = document.getElementById('overlay-primary-btn');
+    const primaryLabel = document.getElementById('overlay-primary-label');
+    const allLevelsMsg = document.getElementById('all-levels-msg');
+
+    // Find the next level after the current one (by order)
+    const idx = allLevels.findIndex(l => l.id === (currentLvl && currentLvl.id));
+    const nextLvl = (idx >= 0 && idx < allLevels.length - 1) ? allLevels[idx + 1] : null;
+
+    if (nextLvl) {
+      allLevelsMsg.style.display = 'none';
+      primaryBtn.style.display = '';
+      primaryLabel.textContent = 'Next level';
+      primaryBtn.onclick = () => startLevel(nextLvl);
+    } else {
+      allLevelsMsg.style.display = 'block';
+      primaryBtn.style.display = 'none';
+    }
+
+    gameOverlay.classList.add('show');
   }
 
   // ── Leaderboard ──
@@ -3036,7 +3070,7 @@
   }
 
   function handleDevKey(key) {
-    if (!gameRunning || gamePaused || devConsoleOpen) return;
+    if (!gameRunning || gamePaused || devConsoleOpen || levelMode) return;
     devCodeBuffer += key;
     if (devCodeBuffer.includes('5615')) {
       devMode = true;
@@ -3463,10 +3497,11 @@
       e.preventDefault();
       resumeGame();
     }
-    // Space = Retry on game over
+    // Space = trigger primary overlay button (Retry / Next level) on game over
     if (e.code === 'Space' && !gameRunning && !gamePaused && gameScreen.style.display === 'block') {
       e.preventDefault();
-      restartGame();
+      const btn = document.getElementById('overlay-primary-btn');
+      if (btn.style.display !== 'none') btn.click();
     }
     // Dev mode: toggle fly with Space
     if (e.code === 'Space' && devMode && gameRunning && !gamePaused && !devConsoleOpen) {
@@ -3646,6 +3681,16 @@
       if (p.x <= p.moveOrigin)               { p.x = p.moveOrigin;               p.moveDir =  1; }
     }
 
+    // Level mode: keep flags glued to their resting platform (follows moving platforms)
+    if (levelMode && levelFlags.length) {
+      for (const f of levelFlags) {
+        if (f.restPlat) {
+          f.x = f.restPlat.x + f.relX;
+          f.y = f.restPlat.y - f.h;
+        }
+      }
+    }
+
     // Update unstable platform timers
     const dt = 1 / 60;
     for (const p of platforms) {
@@ -3691,7 +3736,7 @@
     // Score = how high camera has moved (in pixels, /10 for cleaner number)
     score = Math.round(cameraY / 10);
     hudScore.textContent = score;
-    gameHud.style.display = setShowHeight.checked ? '' : 'none';
+    gameHud.style.display = (levelMode || !setShowHeight.checked) ? 'none' : '';
 
     // Lerp scale back to normal
     player.scaleX += (1 - player.scaleX) * 0.18;
@@ -4088,6 +4133,11 @@
     cancelAnimationFrame(animId);
     clearTimeout(cursorHideTimer);
     cursorCanvas.style.opacity = '1';
+    document.getElementById('all-levels-msg').style.display = 'none';
+    const primaryBtn = document.getElementById('overlay-primary-btn');
+    primaryBtn.style.display = '';
+    document.getElementById('overlay-primary-label').textContent = 'Retry';
+    primaryBtn.onclick = () => restartGame();
     overlayTitle.textContent = 'GAME OVER';
     overlayScore.textContent = 'HEIGHT: ' + score;
     cheatMsg.style.display = 'block';
@@ -4111,6 +4161,11 @@
     clearTimeout(cursorHideTimer);
     cursorCanvas.style.opacity = '1';
     cheatMsg.style.display = 'none';
+    document.getElementById('all-levels-msg').style.display = 'none';
+    const primaryBtn = document.getElementById('overlay-primary-btn');
+    primaryBtn.style.display = '';
+    document.getElementById('overlay-primary-label').textContent = 'Retry';
+    primaryBtn.onclick = () => restartGame();
     overlayTitle.textContent = levelMode ? 'LEVEL FAILED' : 'GAME OVER';
     overlayScore.textContent = 'HEIGHT: ' + score;
     gameOverlay.classList.add('show');
