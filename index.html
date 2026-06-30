@@ -187,7 +187,24 @@
   ───────────────────────────────────── */
   #home-screen {
     gap: 0;
-    justify-content: center;
+    justify-content: flex-start;
+    padding-top: 18vh;
+  }
+
+  #home-panel-classic {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    animation: panelIn 0.25s ease both;
+  }
+  #home-panel-level {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(420px, 92vw);
+    animation: panelIn 0.25s ease both;
   }
 
   @keyframes panelIn {
@@ -1731,7 +1748,7 @@
   </div>
 
   <!-- Level panel -->
-  <div id="home-panel-level" style="display:none;flex-direction:column;align-items:center;gap:12px;width:min(420px,92vw);">
+  <div id="home-panel-level">
     <div id="level-loading" style="font-family:'Press Start 2P',monospace;font-size:8px;color:#888;letter-spacing:1px;">Loading levels...</div>
     <div id="level-list" style="display:none;flex-direction:column;gap:8px;width:100%;"></div>
     <div id="level-empty" style="display:none;font-family:'Press Start 2P',monospace;font-size:8px;color:#555;letter-spacing:1px;">No levels yet.</div>
@@ -2381,21 +2398,47 @@
     const sawList = [];
     const flags = [];
 
+    // The editor saves objects using its own window dimensions, which can differ
+    // wildly from the player's screen. We normalize both axes:
+    //  - X: center the level's horizontal bounding box on the player's screen width
+    //  - Y: anchor the lowest (closest to editor's ground) object a fixed distance
+    //       above the player's actual ground, preserving relative vertical spacing
+    const nonFlag = objs.filter(o => o.type !== 'flag');
+    let xOffset = 0, yOffset = 0;
+
+    if (nonFlag.length) {
+      // Horizontal centering based on full bounding box (including flags)
+      const allX = objs.map(o => o.x);
+      const allXEnd = objs.map(o => o.x + (o.w || 0));
+      const minX = Math.min(...allX);
+      const maxX = Math.max(...allXEnd);
+      const levelWidth = maxX - minX;
+      const levelCenterX = minX + levelWidth / 2;
+      xOffset = (W / 2) - levelCenterX;
+
+      // Vertical anchor: lowest non-flag object sits a fixed distance above ground
+      const lowestY = Math.max(...nonFlag.map(o => o.y));
+      const targetLowestY = (H - 20) - 100;
+      yOffset = targetLowestY - lowestY;
+    }
+
     // Ground
     plats.push({ x: 0, y: H - 20, w: W, h: 20, unstable: false, moving: false,
                  shaking: false, shakeTimer: 0, broken: false,
                  moveOrigin: 0, moveRange: 0, moveDir: 1, moveSpeed: 0 });
 
     for (const o of objs) {
+      const ox = o.x + xOffset;
+      const oy = o.y + yOffset;
       if (o.type === 'flag') {
-        flags.push({ x: o.x, y: o.y, w: o.w || 22, h: o.h || 40 });
+        flags.push({ x: ox, y: oy, w: o.w || 22, h: o.h || 40 });
         continue;
       }
       const p = {
-        x: o.x, y: o.y, w: o.w, h: o.h || 12,
+        x: ox, y: oy, w: o.w, h: o.h || 12,
         unstable: o.type === 'unstable',
         moving:   o.type === 'moving',
-        moveOrigin: o.x,
+        moveOrigin: ox,
         moveRange: o.moveRange || 0,
         moveDir: 1,
         moveSpeed: o.moveSpeed || 0.8,
@@ -2404,8 +2447,8 @@
       plats.push(p);
       if (o.type === 'saw') {
         sawList.push({
-          platX: o.x, platW: o.w, platY: o.y,
-          x: o.x + SAW_R, dir: 1,
+          platX: ox, platW: o.w, platY: oy,
+          x: ox + SAW_R, dir: 1,
           speed: o.sawSpeed || 0.6,
         });
       }
@@ -2462,16 +2505,18 @@
       saws = sawList;
       levelFlags = flags;
 
-      // Place player near first platform above ground
+      // Place player just above the lowest non-ground platform (already coordinate-normalized)
       let startY = H - 20 - P_H_NORMAL;
-      const sorted = lvl.objects.filter(o => o.type !== 'flag').sort((a,b) => b.y - a.y);
-      if (sorted.length) {
-        const lowest = sorted[0];
+      let startX = W / 2 - P_W_NORMAL / 2;
+      const nonGroundPlats = plats.filter(p => p.w < W); // exclude the ground platform itself
+      if (nonGroundPlats.length) {
+        const lowest = nonGroundPlats.reduce((a, b) => (a.y > b.y ? a : b));
         startY = lowest.y - P_H_NORMAL - 2;
+        startX = lowest.x + lowest.w / 2 - P_W_NORMAL / 2;
       }
 
       player = {
-        x: W / 2 - P_W_NORMAL / 2,
+        x: startX,
         y: startY,
         vx: 0, vy: 0,
         w: P_W_NORMAL, h: P_H_NORMAL,
