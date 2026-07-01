@@ -2476,6 +2476,11 @@
   }
 
   function startLevel(lvl) {
+    // Always cancel any running game loop and zoom check first
+    cancelAnimationFrame(animId);
+    stopZoomCheck();
+    gameRunning = false;
+
     if (isZoomed()) {
       cheatMsg.style.display = 'block';
       flash.classList.add('on');
@@ -2497,16 +2502,9 @@
     currentLvl = lvl;
     levelMode = true;
 
-    flash.classList.add('on');
-    setTimeout(() => {
-      homeScreen.classList.remove('active');
-      gameScreen.style.display = 'block';
-      flash.style.transition = 'opacity 0.35s';
-      flash.classList.remove('on');
-      settingsBtn.classList.remove('visible');
-      leaderboardBtn.classList.remove('visible');
+    const alreadyInGame = gameScreen.style.display === 'block';
 
-      // Init game engine with level objects
+    function initLevelState() {
       resizeCanvas();
       keys = {};
       score = 0;
@@ -2516,7 +2514,7 @@
       spikes = [];
       spikeWarnings = [];
       spikeTimer = 0;
-      nextSpikeInterval = 9999; // no spikes in level mode
+      nextSpikeInterval = 9999;
       resetEaster();
 
       const { plats, sawList, flags } = buildLevelPlatforms(lvl);
@@ -2524,13 +2522,11 @@
       saws = sawList;
       levelFlags = flags;
 
-      // Player always starts bottom-center, standing on the ground — same as classic mode
       const startY = H - 20 - P_H_NORMAL;
       const startX = W / 2 - P_W_NORMAL / 2;
 
       player = {
-        x: startX,
-        y: startY,
+        x: startX, y: startY,
         vx: 0, vy: 0,
         w: P_W_NORMAL, h: P_H_NORMAL,
         onGround: false, ducking: false,
@@ -2552,14 +2548,39 @@
       gameOverlay.classList.remove('show');
       pauseOverlay.classList.remove('show');
       cheatMsg.style.display = 'none';
+      document.getElementById('all-levels-msg').style.display = 'none';
 
+      cancelAnimationFrame(animId); // final safety cancel before new loop
       loop();
       hideCursorInGame();
       startZoomCheck();
       setTimeout(() => { if (gameRunning && !gamePaused) showControls(); }, 3000);
       resetControlsIdleTimer();
-    }, 180);
-    setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+    }
+
+    if (alreadyInGame) {
+      // Already in game screen — just flash briefly and restart, no screen swap needed
+      flash.classList.add('on');
+      setTimeout(() => {
+        flash.style.transition = 'opacity 0.35s';
+        flash.classList.remove('on');
+        initLevelState();
+      }, 180);
+      setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+    } else {
+      // Coming from home screen — do full transition
+      flash.classList.add('on');
+      setTimeout(() => {
+        homeScreen.classList.remove('active');
+        gameScreen.style.display = 'block';
+        flash.style.transition = 'opacity 0.35s';
+        flash.classList.remove('on');
+        settingsBtn.classList.remove('visible');
+        leaderboardBtn.classList.remove('visible');
+        initLevelState();
+      }, 180);
+      setTimeout(() => { flash.style.transition = 'opacity 0.15s'; }, 600);
+    }
   }
 
   function checkLevelWin() {
