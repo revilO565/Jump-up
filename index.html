@@ -2603,6 +2603,7 @@
     clearTimeout(cursorHideTimer);
     cursorCanvas.style.opacity = '1';
     overlayTitle.textContent = 'LEVEL COMPLETE!';
+    overlayScore.style.display = levelMode ? 'none' : '';
     overlayScore.textContent = 'HEIGHT: ' + score;
     cheatMsg.style.display = 'none';
 
@@ -4160,6 +4161,7 @@
     document.getElementById('overlay-primary-label').textContent = 'Retry';
     primaryBtn.onclick = () => restartGame();
     overlayTitle.textContent = 'GAME OVER';
+    overlayScore.style.display = '';
     overlayScore.textContent = 'HEIGHT: ' + score;
     cheatMsg.style.display = 'block';
     gameOverlay.classList.add('show');
@@ -4188,6 +4190,7 @@
     document.getElementById('overlay-primary-label').textContent = 'Retry';
     primaryBtn.onclick = () => restartGame();
     overlayTitle.textContent = levelMode ? 'LEVEL FAILED' : 'GAME OVER';
+    overlayScore.style.display = levelMode ? 'none' : '';
     overlayScore.textContent = 'HEIGHT: ' + score;
     gameOverlay.classList.add('show');
   }
