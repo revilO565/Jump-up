@@ -1100,12 +1100,17 @@
     letter-spacing: 1px;
     color: #fff;
   }
-  .level-card-desc {
-    font-family: var(--pixel);
-    font-size: clamp(5px,0.9vw,7px);
-    letter-spacing: 1px;
-    color: #666;
+  .level-card-locked {
+    opacity: 0.4;
   }
+  .level-btn-locked {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    border-color: #555;
+    color: #555;
+  }
+  .level-btn-locked::before { display: none; }
 
   #home-version-tag { display: none; }
 
@@ -2345,6 +2350,24 @@
       if (!levelsLoaded) loadLevels();
     }
   }
+  // ── Level unlock tracking (localStorage) ──
+  function getUnlockedLevels() {
+    try { return JSON.parse(localStorage.getItem('jumpup_unlocked') || '[]'); }
+    catch(e) { return []; }
+  }
+  function unlockLevel(levelId) {
+    const unlocked = getUnlockedLevels();
+    if (!unlocked.includes(levelId)) {
+      unlocked.push(levelId);
+      localStorage.setItem('jumpup_unlocked', JSON.stringify(unlocked));
+    }
+  }
+  function isLevelUnlocked(lvl, index) {
+    if (index === 0) return true; // first level always unlocked
+    const unlocked = getUnlockedLevels();
+    return unlocked.includes(lvl.id);
+  }
+
   async function loadLevels() {
     levelLoading.style.display = 'block';
     levelLoading.textContent = 'Loading levels...';
@@ -2361,25 +2384,24 @@
         return;
       }
       levelList.innerHTML = '';
-      levels.forEach(lvl => {
+      levels.forEach((lvl, idx) => {
+        const unlocked = isLevelUnlocked(lvl, idx);
         const card = document.createElement('div');
-        card.className = 'level-card';
+        card.className = 'level-card' + (unlocked ? '' : ' level-card-locked');
         const info = document.createElement('div');
         info.className = 'level-card-info';
         const name = document.createElement('div');
         name.className = 'level-card-name';
         name.textContent = lvl.name || 'Unnamed Level';
         info.appendChild(name);
-        if (lvl.description) {
-          const desc = document.createElement('div');
-          desc.className = 'level-card-desc';
-          desc.textContent = lvl.description;
-          info.appendChild(desc);
-        }
         const btn = document.createElement('button');
-        btn.className = 'pixel-btn';
-        btn.innerHTML = '<span>Play</span>';
-        btn.onclick = () => startLevel(lvl);
+        btn.className = 'pixel-btn' + (unlocked ? '' : ' level-btn-locked');
+        btn.innerHTML = '<span>' + (unlocked ? 'Play' : '🔒') + '</span>';
+        if (unlocked) {
+          btn.onclick = () => startLevel(lvl);
+        } else {
+          btn.disabled = true;
+        }
         card.appendChild(info);
         card.appendChild(btn);
         levelList.appendChild(card);
@@ -2410,18 +2432,19 @@
     let xOffset = 0, yOffset = 0;
 
     if (nonFlag.length) {
-      // Horizontal centering based on full bounding box (including flags)
+      // Horizontal centering
       const allX = objs.map(o => o.x);
       const allXEnd = objs.map(o => o.x + (o.w || 0));
       const minX = Math.min(...allX);
       const maxX = Math.max(...allXEnd);
-      const levelWidth = maxX - minX;
-      const levelCenterX = minX + levelWidth / 2;
+      const levelCenterX = minX + (maxX - minX) / 2;
       xOffset = (W / 2) - levelCenterX;
 
-      // Vertical anchor: lowest non-flag object sits a fixed distance above ground
+      // Vertical: anchor lowest non-flag platform so it sits just above the ground,
+      // preserving exact pixel spacing between all objects as designed in the editor.
       const lowestY = Math.max(...nonFlag.map(o => o.y));
-      const targetLowestY = (H - 20) - 100;
+      const lowestH = nonFlag.find(o => o.y === lowestY)?.h || 12;
+      const targetLowestY = (H - 20) - lowestH - 10; // 10px gap above ground
       yOffset = targetLowestY - lowestY;
     }
 
@@ -2616,6 +2639,8 @@
     const nextLvl = (idx >= 0 && idx < allLevels.length - 1) ? allLevels[idx + 1] : null;
 
     if (nextLvl) {
+      unlockLevel(nextLvl.id);
+      levelsLoaded = false; // force reload so lock state updates when returning to home
       allLevelsMsg.style.display = 'none';
       primaryBtn.style.display = '';
       primaryLabel.textContent = 'Next level';
@@ -2968,7 +2993,7 @@
   let warningAction     = null; // 'menu' or 'reset'
 
   function confirmGoHome() {
-    if (!setShowWarning.checked) { goHome(); return; }
+    if (!setShowWarning.checked || levelMode) { goHome(); return; }
     warningAction = 'menu';
     menuWarningText.textContent = 'Your score will not count if you go back to the menu.';
     menuWarningConfirmBtn.querySelector('span').textContent = 'Menu';
@@ -2976,7 +3001,7 @@
     menuWarning.classList.add('show');
   }
   function confirmReset() {
-    if (!setShowWarning.checked) { restartGame(); return; }
+    if (!setShowWarning.checked || levelMode) { restartGame(); return; }
     warningAction = 'reset';
     menuWarningText.textContent = 'Your score will not count if you reset.';
     menuWarningConfirmBtn.querySelector('span').textContent = 'Reset';
