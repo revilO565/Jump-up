@@ -1226,9 +1226,11 @@
   };
 
   // ── Save stats + settings ──
-  window.firebaseSaveData = async function (uid, stats, settings) {
+  window.firebaseSaveData = async function (uid, stats, settings, unlockedLevels) {
     if (!uid) return;
-    await updateDoc(doc(db, "users", uid), { stats, settings });
+    const update = { stats, settings };
+    if (unlockedLevels !== undefined) update.unlockedLevels = unlockedLevels;
+    await updateDoc(doc(db, "users", uid), update);
   };
 
   // ── Rename ──
@@ -2085,6 +2087,11 @@
     setShowCursor.checked  = s.showCursor  ?? false;
     setShowWarning.checked = s.showWarning ?? true;
 
+    // Restore unlocked levels from Firebase (synced across devices)
+    if (data.unlockedLevels && Array.isArray(data.unlockedLevels)) {
+      localStorage.setItem('jumpup_unlocked', JSON.stringify(data.unlockedLevels));
+    }
+
     currentPlayerName = data.playerName || '';
 
     // Refresh stat display instantly (no animation on load)
@@ -2360,6 +2367,18 @@
     if (!unlocked.includes(levelId)) {
       unlocked.push(levelId);
       localStorage.setItem('jumpup_unlocked', JSON.stringify(unlocked));
+      // Also save to Firebase so it syncs across devices
+      if (currentUid && !isGuest) {
+        const settings = {
+          showHeight:  setShowHeight.checked,
+          skipTimer:   setSkipTimer.checked,
+          showBest:    setShowBest.checked,
+          showCursor:  setShowCursor.checked,
+          showWarning: setShowWarning.checked,
+        };
+        const stats = { best: statBest, games: statGames, total: statTotal };
+        window.firebaseSaveData(currentUid, stats, settings, unlocked).catch(() => {});
+      }
     }
   }
   function isLevelUnlocked(lvl, index) {
@@ -2410,6 +2429,29 @@
     } catch(e) {
       levelLoading.textContent = 'Failed to load levels.';
     }
+  }
+
+  function refreshLevelListLockState() {
+    const cards = levelList.querySelectorAll('.level-card');
+    allLevels.forEach((lvl, idx) => {
+      const card = cards[idx];
+      if (!card) return;
+      const unlocked = isLevelUnlocked(lvl, idx);
+      card.classList.toggle('level-card-locked', !unlocked);
+      const btn = card.querySelector('button');
+      if (!btn) return;
+      if (unlocked) {
+        btn.className = 'pixel-btn';
+        btn.innerHTML = '<span>Play</span>';
+        btn.disabled = false;
+        btn.onclick = () => startLevel(lvl);
+      } else {
+        btn.className = 'pixel-btn level-btn-locked';
+        btn.innerHTML = '<span>🔒</span>';
+        btn.disabled = true;
+        btn.onclick = null;
+      }
+    });
   }
 
   // ── Level Mode ──
@@ -2641,6 +2683,8 @@
     if (nextLvl) {
       unlockLevel(nextLvl.id);
       levelsLoaded = false; // force reload so lock state updates when returning to home
+      // Also immediately refresh the list in the DOM so buttons are clickable on return
+      refreshLevelListLockState();
       allLevelsMsg.style.display = 'none';
       primaryBtn.style.display = '';
       primaryLabel.textContent = 'Next level';
